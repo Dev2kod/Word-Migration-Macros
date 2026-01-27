@@ -1,0 +1,122 @@
+Option Explicit
+
+' =================== ENTRY POINT ===================
+Sub BuildDoc_FromInput_UsingTemplate_BodyBoldHeadings()
+    Dim srcPath As String, tplPath As String, outPath As String
+    
+    srcPath = PickOneDocx("Select INPUT Word document")
+    If Len(srcPath) = 0 Then Exit Sub
+    
+    tplPath = PickTemplateDocOrDotx("Select TEMPLATE document")
+    If Len(tplPath) = 0 Then Exit Sub
+    
+    outPath = PickSaveDocx("Save output as")
+    If Len(outPath) = 0 Then Exit Sub
+    
+    InsertBodyContentIntoTemplate srcPath, tplPath, outPath
+    MsgBox "Document created successfully!" & vbCrLf & outPath, vbInformation
+End Sub
+
+' =================== MAIN LOGIC ===================
+Private Sub InsertBodyContentIntoTemplate(ByVal srcPath As String, ByVal tplPath As String, ByVal outPath As String)
+    Dim srcDoc As Document, tplDoc As Document, p As Paragraph
+    
+    Application.ScreenUpdating = False
+    Application.DisplayAlerts = wdAlertsNone
+    
+    Set srcDoc = Documents.Open(srcPath, ReadOnly:=True, Visible:=False)
+    Set tplDoc = Documents.Add(Template:=tplPath, NewTemplate:=False)
+    
+    ' Preserve template page-1, then insert break
+    Dim atEnd As Range
+    Set atEnd = tplDoc.Content
+    atEnd.Collapse wdCollapseEnd
+    atEnd.InsertBreak wdPageBreak
+    atEnd.Collapse wdCollapseEnd
+    
+    ' Only iterate through BODY story, not headers/footers
+    Dim bodyRange As Range
+    Set bodyRange = srcDoc.StoryRanges(wdMainTextStory)
+    
+    For Each p In bodyRange.Paragraphs
+        Dim txt As String: txt = Trim(Replace(p.Range.Text, vbCr, ""))
+        If Len(txt) = 0 Then GoTo NextP
+        
+        If p.Range.Font.Bold = True Then
+            ' Bold text → Main Heading
+            InsertHeading tplDoc, txt
+        Else
+            ' Normal text → Body
+            InsertBody tplDoc, txt
+        End If
+NextP:
+    Next p
+    
+    tplDoc.SaveAs2 outPath, wdFormatXMLDocument
+    tplDoc.Close SaveChanges:=False
+    srcDoc.Close SaveChanges:=False
+    
+    Application.DisplayAlerts = wdAlertsAll
+    Application.ScreenUpdating = True
+End Sub
+
+' =================== EMITTERS ===================
+Private Sub InsertHeading(ByVal doc As Document, ByVal txt As String)
+    Dim p As Paragraph
+    Set p = AppendPara(doc, txt)
+    p.Range.Style = doc.Styles(wdStyleHeading1)
+    p.OutlineLevel = wdOutlineLevel1
+    p.Range.ListFormat.RemoveNumbers
+End Sub
+
+Private Sub InsertBody(ByVal doc As Document, ByVal txt As String)
+    Dim p As Paragraph
+    Set p = AppendPara(doc, txt)
+    On Error Resume Next
+    p.Range.Style = doc.Styles("Body Text")
+    p.OutlineLevel = wdOutlineLevelBodyText
+    p.Alignment = wdAlignParagraphJustify
+    p.Range.ListFormat.RemoveNumbers
+    On Error GoTo 0
+End Sub
+
+Private Function AppendPara(ByVal doc As Document, ByVal txt As String) As Paragraph
+    Dim atEnd As Range
+    Set atEnd = doc.Content
+    atEnd.Collapse wdCollapseEnd
+    atEnd.InsertAfter txt & vbCrLf
+    Set AppendPara = doc.Paragraphs.Last
+End Function
+
+' =================== UI HELPERS ===================
+Private Function PickOneDocx(ByVal Title As String) As String
+    With Application.FileDialog(msoFileDialogFilePicker)
+        .Title = Title
+        .AllowMultiSelect = False
+        .Filters.Clear
+        .Filters.Add "Word document", "*.docx"
+        If .Show = -1 Then PickOneDocx = .SelectedItems(1)
+    End With
+End Function
+
+Private Function PickTemplateDocOrDotx(ByVal Title As String) As String
+    With Application.FileDialog(msoFileDialogFilePicker)
+        .Title = Title
+        .AllowMultiSelect = False
+        .Filters.Clear
+        .Filters.Add "Word / Template", "*.docx;*.dotx"
+        If .Show = -1 Then PickTemplateDocOrDotx = .SelectedItems(1)
+    End With
+End Function
+
+Private Function PickSaveDocx(ByVal Title As String) As String
+    With Application.FileDialog(msoFileDialogSaveAs)
+        .Title = Title
+        .InitialFileName = "converted.docx"
+        If .Show = -1 Then
+            Dim sel As String: sel = .SelectedItems(1)
+            If LCase$(Right$(sel, 5)) <> ".docx" Then sel = sel & ".docx"
+            PickSaveDocx = sel
+        End If
+    End With
+End Function
