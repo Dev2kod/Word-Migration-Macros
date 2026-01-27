@@ -1,122 +1,181 @@
 Option Explicit
 
-' =================== ENTRY POINT ===================
-Sub BuildDoc_FromInput_UsingTemplate_BodyBoldHeadings()
-    Dim srcPath As String, tplPath As String, outPath As String
-    
-    srcPath = PickOneDocx("Select INPUT Word document")
-    If Len(srcPath) = 0 Then Exit Sub
-    
-    tplPath = PickTemplateDocOrDotx("Select TEMPLATE document")
-    If Len(tplPath) = 0 Then Exit Sub
-    
-    outPath = PickSaveDocx("Save output as")
-    If Len(outPath) = 0 Then Exit Sub
-    
-    InsertBodyContentIntoTemplate srcPath, tplPath, outPath
-    MsgBox "Document created successfully!" & vbCrLf & outPath, vbInformation
-End Sub
+Sub ConvertInputToTemplate()
 
-' =================== MAIN LOGIC ===================
-Private Sub InsertBodyContentIntoTemplate(ByVal srcPath As String, ByVal tplPath As String, ByVal outPath As String)
-    Dim srcDoc As Document, tplDoc As Document, p As Paragraph
-    
-    Application.ScreenUpdating = False
-    Application.DisplayAlerts = wdAlertsNone
-    
-    Set srcDoc = Documents.Open(srcPath, ReadOnly:=True, Visible:=False)
-    Set tplDoc = Documents.Add(Template:=tplPath, NewTemplate:=False)
-    
-    ' Preserve template page-1, then insert break
-    Dim atEnd As Range
-    Set atEnd = tplDoc.Content
-    atEnd.Collapse wdCollapseEnd
-    atEnd.InsertBreak wdPageBreak
-    atEnd.Collapse wdCollapseEnd
-    
-    ' Only iterate through BODY story, not headers/footers
-    Dim bodyRange As Range
-    Set bodyRange = srcDoc.StoryRanges(wdMainTextStory)
-    
-    For Each p In bodyRange.Paragraphs
-        Dim txt As String: txt = Trim(Replace(p.Range.Text, vbCr, ""))
-        If Len(txt) = 0 Then GoTo NextP
-        
-        If p.Range.Font.Bold = True Then
-            ' Bold text → Main Heading
-            InsertHeading tplDoc, txt
-        Else
-            ' Normal text → Body
-            InsertBody tplDoc, txt
+    Dim inputDoc As Document
+    Dim templateDoc As Document
+    Dim outputDoc As Document
+
+    Dim inputPath As String
+    Dim templatePath As String
+    Dim savePath As String
+
+    Dim para As Paragraph
+    Dim targetRange As Range
+    Dim textLine As String
+    Dim cleanText As String
+
+    '---------------------------
+    ' Pick files
+    '---------------------------
+    inputPath = GetFilePath("Select INPUT Word file")
+    If inputPath = "" Then Exit Sub
+
+    templatePath = GetFilePath("Select TEMPLATE Word file")
+    If templatePath = "" Then Exit Sub
+
+    savePath = GetSavePath()
+    If savePath = "" Then Exit Sub
+
+    '---------------------------
+    ' Open documents
+    '---------------------------
+    Set inputDoc = Documents.Open(inputPath, ReadOnly:=True)
+
+    Set templateDoc = Documents.Open(templatePath)
+    templateDoc.SaveAs2 savePath
+    Set outputDoc = ActiveDocument
+
+    '---------------------------
+    ' Start writing AFTER page 2
+    ' (i.e. Page 3)
+    '---------------------------
+    Set targetRange = outputDoc.GoTo(What:=wdGoToPage, _
+                                     Which:=wdGoToAbsolute, _
+                                     Count:=3)
+    targetRange.Collapse wdCollapseStart
+
+    '---------------------------
+    ' Process input paragraphs
+    '---------------------------
+    For Each para In inputDoc.Paragraphs
+
+        textLine = Trim(Replace(para.Range.text, vbCr, ""))
+
+        If textLine <> "" Then
+
+            ' Main heading (1.0, 2.0 ...)
+            If IsMainHeading(textLine) Then
+                cleanText = RemoveNumbering(textLine)
+                InsertStyledParagraph targetRange, cleanText, "Heading 1"
+
+            ' Sub heading (1.1, 2.3 ...)
+            ElseIf IsSubHeading(textLine) Then
+                cleanText = RemoveNumbering(textLine)
+                InsertStyledParagraph targetRange, cleanText, "Heading 2"
+
+            ' Normal content
+            Else
+                InsertStyledParagraph targetRange, textLine, "Normal"
+            End If
+
         End If
-NextP:
-    Next p
-    
-    tplDoc.SaveAs2 outPath, wdFormatXMLDocument
-    tplDoc.Close SaveChanges:=False
-    srcDoc.Close SaveChanges:=False
-    
-    Application.DisplayAlerts = wdAlertsAll
-    Application.ScreenUpdating = True
+    Next para
+
+    inputDoc.Close False
+
+    MsgBox "Document conversion completed successfully!", vbInformation
+
 End Sub
 
-' =================== EMITTERS ===================
-Private Sub InsertHeading(ByVal doc As Document, ByVal txt As String)
-    Dim p As Paragraph
-    Set p = AppendPara(doc, txt)
-    p.Range.Style = doc.Styles(wdStyleHeading1)
-    p.OutlineLevel = wdOutlineLevel1
-    p.Range.ListFormat.RemoveNumbers
-End Sub
+'==================================================
+' Inserts text using style without extra spacing
+'==================================================
+Sub InsertStyledParagraph(ByRef rng As Range, _
+                          ByVal textValue As String, _
+                          ByVal styleName As String)
 
-Private Sub InsertBody(ByVal doc As Document, ByVal txt As String)
-    Dim p As Paragraph
-    Set p = AppendPara(doc, txt)
-    On Error Resume Next
-    p.Range.Style = doc.Styles("Body Text")
-    p.OutlineLevel = wdOutlineLevelBodyText
-    p.Alignment = wdAlignParagraphJustify
-    p.Range.ListFormat.RemoveNumbers
-    On Error GoTo 0
-End Sub
+    rng.InsertAfter textValue
+    rng.Paragraphs(1).style = styleName
 
-Private Function AppendPara(ByVal doc As Document, ByVal txt As String) As Paragraph
-    Dim atEnd As Range
-    Set atEnd = doc.Content
-    atEnd.Collapse wdCollapseEnd
-    atEnd.InsertAfter txt & vbCrLf
-    Set AppendPara = doc.Paragraphs.Last
-End Function
+    With rng.Paragraphs(1).Format
+        ' Spacing control
+        .SpaceBefore = 0
+        .SpaceAfter = 6
 
-' =================== UI HELPERS ===================
-Private Function PickOneDocx(ByVal Title As String) As String
-    With Application.FileDialog(msoFileDialogFilePicker)
-        .Title = Title
-        .AllowMultiSelect = False
-        .Filters.Clear
-        .Filters.Add "Word document", "*.docx"
-        If .Show = -1 Then PickOneDocx = .SelectedItems(1)
+        ' Pagination FIX (important)
+        .KeepWithNext = False
+        .KeepTogether = False
+        .PageBreakBefore = False
     End With
+
+    rng.InsertParagraphAfter
+    rng.Collapse wdCollapseEnd
+
+End Sub
+
+
+'==================================================
+' Detect main heading (1.0, 2.0 ...)
+'==================================================
+Function IsMainHeading(textLine As String) As Boolean
+    IsMainHeading = textLine Like "[0-9]*.0 *"
 End Function
 
-Private Function PickTemplateDocOrDotx(ByVal Title As String) As String
+'==================================================
+' Detect sub heading (1.1, 2.3 ...)
+'==================================================
+Function IsSubHeading(textLine As String) As Boolean
+    IsSubHeading = textLine Like "[0-9]*.[1-9]* *"
+End Function
+
+'==================================================
+' Remove numeric prefix from heading
+'==================================================
+Function RemoveNumbering(textLine As String) As String
+    Dim pos As Long
+    pos = InStr(textLine, " ")
+    If pos > 0 Then
+        RemoveNumbering = Trim(Mid(textLine, pos + 1))
+    Else
+        RemoveNumbering = textLine
+    End If
+End Function
+
+'==================================================
+' File picker (input / template)
+'==================================================
+Function GetFilePath(title As String) As String
     With Application.FileDialog(msoFileDialogFilePicker)
-        .Title = Title
-        .AllowMultiSelect = False
+        .title = title
         .Filters.Clear
-        .Filters.Add "Word / Template", "*.docx;*.dotx"
-        If .Show = -1 Then PickTemplateDocOrDotx = .SelectedItems(1)
-    End With
-End Function
-
-Private Function PickSaveDocx(ByVal Title As String) As String
-    With Application.FileDialog(msoFileDialogSaveAs)
-        .Title = Title
-        .InitialFileName = "converted.docx"
+        .Filters.Add "Word Documents", "*.docx"
+        .AllowMultiSelect = False
         If .Show = -1 Then
-            Dim sel As String: sel = .SelectedItems(1)
-            If LCase$(Right$(sel, 5)) <> ".docx" Then sel = sel & ".docx"
-            PickSaveDocx = sel
+            GetFilePath = .SelectedItems(1)
+        Else
+            GetFilePath = ""
         End If
     End With
 End Function
+
+'==================================================
+' Save As dialog for output
+'==================================================
+Function GetSavePath() As String
+    With Application.FileDialog(msoFileDialogSaveAs)
+        .title = "Save OUTPUT file as"
+        .InitialFileName = "Converted_Document.docx"
+        If .Show = -1 Then
+            GetSavePath = .SelectedItems(1)
+        Else
+            GetSavePath = ""
+        End If
+    End With
+End Function
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
