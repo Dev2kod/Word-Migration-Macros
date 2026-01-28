@@ -1,25 +1,36 @@
 Option Explicit
 
 ' ==========================================================
-' MAIN ENTRY
+' SIMPLIFIED TEMPLATE FILLING MACRO
 ' ==========================================================
-Sub FillTemplate_FromSource_NoJSON()
+' Purpose: Extract title and document number from source header,
+'          create new file from template, fill placeholders
+' Changes from original:
+'   1. Title extracted from header (center, below company name)
+'   2. Only extracts DOC_Number and TITLE
+'   3. Creates new file (doesn't modify template)
+'   4. User selects output folder and filename
+'   5. All remaining placeholders filled as blank
+' ==========================================================
 
-    Dim srcPath As String, templatePath As String
-    Dim srcDoc As Document, tplDoc As Document
-    Dim data As Object              ' Scripting.Dictionary: key -> value
-    Dim revLookup As Object         ' R# -> A/B/C...
+Sub FillTemplate_SimplifiedVersion()
+
+    Dim srcPath As String, templatePath As String, outputPath As String
+    Dim srcDoc As Document, tplDoc As Document, newDoc As Document
+    Dim data As Object              ' Dictionary: key -> value
     Dim fs As Object
+    Dim outputFolder As String, outputFileName As String
 
     Set data = CreateObject("Scripting.Dictionary")
-    Set revLookup = CreateObject("Scripting.Dictionary")
     Set fs = CreateObject("Scripting.FileSystemObject")
 
     ' -----------------------------------------
-    ' Pick Source Document (O&M manual)
+    ' Pick Source Document
     ' -----------------------------------------
     With Application.FileDialog(msoFileDialogFilePicker)
-        .title = "Select SOURCE Word document (extract data from)"
+        .Title = "Select SOURCE Word document (to extract title and doc number from)"
+        .Filters.Clear
+        .Filters.Add "Word Documents", "*.docx;*.doc"
         If .Show <> -1 Then Exit Sub
         srcPath = .SelectedItems(1)
     End With
@@ -28,217 +39,231 @@ Sub FillTemplate_FromSource_NoJSON()
     ' Pick Template Document
     ' -----------------------------------------
     With Application.FileDialog(msoFileDialogFilePicker)
-        .title = "Select TEMPLATE Word document (with {{placeholders}})"
+        .Title = "Select TEMPLATE Word document (with {{placeholders}})"
+        .Filters.Clear
+        .Filters.Add "Word Documents", "*.docx;*.doc"
         If .Show <> -1 Then Exit Sub
         templatePath = .SelectedItems(1)
     End With
 
     ' -----------------------------------------
-    ' Open source and extract all data into `data`
+    ' Select Output Folder
+    ' -----------------------------------------
+    With Application.FileDialog(msoFileDialogFolderPicker)
+        .Title = "Select OUTPUT folder to save the filled document"
+        If .Show <> -1 Then Exit Sub
+        outputFolder = .SelectedItems(1)
+    End With
+
+    ' -----------------------------------------
+    ' Prompt for Output File Name
+    ' -----------------------------------------
+    outputFileName = InputBox( _
+        "Enter the output file name (without extension):" & vbCrLf & vbCrLf & _
+        "The file will be saved as .docx", _
+        "Output File Name", _
+        "Filled_Document")
+    
+    If outputFileName = "" Then
+        MsgBox "Output file name cannot be empty. Operation cancelled.", vbExclamation
+        Exit Sub
+    End If
+    
+    ' Remove .docx extension if user added it
+    If LCase(Right(outputFileName, 5)) = ".docx" Then
+        outputFileName = Left(outputFileName, Len(outputFileName) - 5)
+    End If
+    
+    ' Build full output path
+    outputPath = outputFolder & Application.PathSeparator & outputFileName & ".docx"
+    
+    ' Check if file already exists
+    If fs.FileExists(outputPath) Then
+        Dim overwrite As VbMsgBoxResult
+        overwrite = MsgBox("File already exists:" & vbCrLf & outputPath & vbCrLf & vbCrLf & _
+                          "Do you want to overwrite it?", vbYesNo + vbQuestion, "File Exists")
+        If overwrite = vbNo Then Exit Sub
+    End If
+
+    ' -----------------------------------------
+    ' Open source and extract data
     ' -----------------------------------------
     Set srcDoc = Documents.Open(FileName:=srcPath, ReadOnly:=True, Visible:=False)
-    srcDoc.Repaginate
-
-    Extract_HeaderAndTitle srcDoc, data     ' TITLE, DOC_Number
-    Extract_FooterRevisionTable srcDoc, data, revLookup
-    Extract_RevisionStatusTable srcDoc, data, revLookup
-
+    
+    ' Extract title and document number from header
+    Extract_TitleAndDocNumber_FromHeader srcDoc, data
+    
     srcDoc.Close SaveChanges:=False
 
     ' -----------------------------------------
-    ' Open template and replace placeholders
+    ' Create new document from template
     ' -----------------------------------------
-    Set tplDoc = Documents.Open(templatePath, AddToRecentFiles:=False)
-
-    ' 1) Replace all keys we extracted
+    Set tplDoc = Documents.Open(templatePath, AddToRecentFiles:=False, ReadOnly:=True, Visible:=False)
+    
+    ' Create a copy - don't modify the original template
+    Set newDoc = Documents.Add(Template:=tplDoc.FullName, Visible:=False)
+    tplDoc.Close SaveChanges:=False
+    
+    ' -----------------------------------------
+    ' Replace placeholders in the new document
+    ' -----------------------------------------
+    
+    ' 1) Replace the placeholders we have data for
     Dim k As Variant, ph As String
-    For Each k In data.keys
+    For Each k In data.Keys
         ph = "{{" & CStr(k) & "}}"
-        ReplaceInAllStories tplDoc, ph, CStr(data(k))
-        ReplaceInAllShapes tplDoc, ph, CStr(data(k))
-        ReplaceInAllHeaderFooterShapes tplDoc, ph, CStr(data(k))
+        ReplaceInAllStories newDoc, ph, CStr(data(k))
+        ReplaceInAllShapes newDoc, ph, CStr(data(k))
+        ReplaceInAllHeaderFooterShapes newDoc, ph, CStr(data(k))
     Next k
 
-    ' 2) Optionally clear any placeholders we didn't set
+    ' 2) Clear all remaining placeholders (fill with blank)
     Dim placeholders As Collection, i As Long, token As String
-    Set placeholders = CollectPlaceholders(tplDoc)
+    Set placeholders = CollectPlaceholders(newDoc)
+    
     For i = 1 To placeholders.Count
         token = placeholders(i)
         If Not data.Exists(token) Then
             ph = "{{" & token & "}}"
-            ReplaceInAllStories tplDoc, ph, ""
-            ReplaceInAllShapes tplDoc, ph, ""
-            ReplaceInAllHeaderFooterShapes tplDoc, ph, ""
+            ReplaceInAllStories newDoc, ph, ""
+            ReplaceInAllShapes newDoc, ph, ""
+            ReplaceInAllHeaderFooterShapes newDoc, ph, ""
         End If
     Next i
 
     ' -----------------------------------------
-    ' Save output and finish (overwrite template directly)
+    ' Save the new document to output path
     ' -----------------------------------------
-    tplDoc.SaveAs2 templatePath, wdFormatXMLDocument
-    MsgBox "Template populated successfully!" & vbCrLf & templatePath, vbInformation
+    newDoc.SaveAs2 outputPath, wdFormatXMLDocument
+    newDoc.Close SaveChanges:=False
+    
+    MsgBox "Template filled successfully!" & vbCrLf & vbCrLf & _
+           "Output file: " & vbCrLf & outputPath, vbInformation, "Success"
 
 End Sub
 
 
 ' ==========================================================
-' DATA EXTRACTION (Directly from Source Doc)
+' DATA EXTRACTION - HEADER ONLY
 ' ==========================================================
-Private Sub Extract_HeaderAndTitle(ByVal doc As Document, ByRef data As Object)
-    Dim firstPageText As String, pageLines() As String
-    Dim title As String, titleParts As String
-    Dim docNo As String
-    Dim i As Long
-
-    Dim headerText As String, headerLines() As String, hline As String
+Private Sub Extract_TitleAndDocNumber_FromHeader(ByVal doc As Document, ByRef data As Object)
+    '
+    ' Extract Title and Document Number from the header section
+    ' Title is in center, below "Tata Consulting Engineers"
+    ' Document number is a pattern like XXX-XXX-XXXX or similar
+    '
+    Dim headerText As String
+    Dim headerLines() As String
+    Dim i As Long, line As String
+    Dim docNumber As String, title As String
+    Dim foundCompanyName As Boolean
+    Dim titleLines As String
+    
+    ' Get the header text from first section
+    On Error Resume Next
     headerText = doc.Sections(1).Headers(wdHeaderFooterPrimary).Range.Text
+    On Error GoTo 0
+    
+    If headerText = "" Then Exit Sub
+    
+    ' Split into lines
     headerLines = Split(headerText, vbCr)
+    foundCompanyName = False
+    titleLines = ""
+    
     For i = 0 To UBound(headerLines)
-        hline = Trim(headerLines(i))
-        If hline Like "*[A-Z0-9]*.*-*" Then
-            docNo = Replace(hline, "'", "")
-            Exit For
-        End If
-    Next i
-
-    firstPageText = doc.Range(0, doc.GoTo(What:=wdGoToPage, Which:=wdGoToAbsolute, Count:=2).Start).Text
-    pageLines = Split(firstPageText, vbCr)
-    titleParts = ""
-    For i = 0 To UBound(pageLines)
-        Dim line As String
-        line = Trim(pageLines(i))
+        line = Trim(headerLines(i))
+        
         If line <> "" Then
-            If InStr(1, UCase(line), "TATA CONSULTING ENGINEERS LIMITED") = 0 Then
-                If InStr(1, UCase(line), "FILE NAME") > 0 Or InStr(1, UCase(line), "DOCUMENT VALID UP TO") > 0 Then
-                    Exit For
+            ' Look for document number pattern (alphanumeric with hyphens/dots)
+            ' Examples: TCE.1234.5678, ABC-DEF-1234, etc.
+            If docNumber = "" Then
+                If IsDocumentNumber(line) Then
+                    docNumber = line
                 End If
-                If line Like "*[A-Za-z]*" Then
-                    If titleParts <> "" Then
-                        titleParts = titleParts & " " & line
+            End If
+            
+            ' Look for company name
+            If InStr(1, UCase(line), "TATA CONSULTING ENGINEERS", vbTextCompare) > 0 Then
+                foundCompanyName = True
+            ElseIf foundCompanyName Then
+                ' After company name, collect lines that look like a title
+                ' Skip lines that look like metadata (FILE NAME, DOCUMENT VALID, etc.)
+                If InStr(1, UCase(line), "FILE NAME") = 0 And _
+                   InStr(1, UCase(line), "DOCUMENT VALID") = 0 And _
+                   InStr(1, UCase(line), "REVISION") = 0 And _
+                   Len(line) > 3 Then  ' Skip very short lines
+                    
+                    If titleLines <> "" Then
+                        titleLines = titleLines & " " & line
                     Else
-                        titleParts = line
+                        titleLines = line
                     End If
                 End If
             End If
         End If
     Next i
-    title = titleParts
-
+    
+    ' Clean up title - remove extra spaces
+    title = CleanText(titleLines)
+    
+    ' Store in data dictionary
     data("TITLE") = Nz(title)
-    data("DOC_Number") = Nz(docNo)
+    data("DOC_Number") = Nz(docNumber)
+    
 End Sub
 
-Private Sub Extract_FooterRevisionTable(ByVal doc As Document, ByRef data As Object, ByRef revLookup As Object)
-    Dim hf As HeaderFooter, tbl As Table
-    Dim tmpDoc As Document
-    Dim txt As String, lines() As String, parts() As String
-    Dim i As Long
-
-    Set tbl = Nothing
-    For Each hf In doc.Sections(1).Footers
-        For Each tbl In hf.Range.Tables
-            If InStr(1, UCase(tbl.Range.Text), "REV") > 0 Then Exit For
-        Next tbl
-        If Not tbl Is Nothing Then Exit For
-    Next hf
-    If tbl Is Nothing Then Exit Sub
-
-    Set tmpDoc = Documents.Add
-    tbl.Range.Copy
-    tmpDoc.Range.Paste
-    tmpDoc.Tables(1).ConvertToText Separator:=wdSeparateByTabs
-    txt = tmpDoc.Range.Text
-    tmpDoc.Close SaveChanges:=False
-
-    lines = Split(txt, vbCr)
-
-    For i = 0 To UBound(lines)
-        If Trim(lines(i)) <> "" Then
-            parts = Split(lines(i), vbTab)
-            Select Case UCase(Trim(parts(0)))
-                Case "PPD. BY", "PPD BY"
-                    ParseByRow_ToDict data, "PPD_BY", parts
-                Case "CHD. BY", "CHD BY"
-                    ParseByRow_ToDict data, "CHD_BY", parts
-                Case "APD. BY", "APD BY"
-                    ParseByRow_ToDict data, "APD_BY", parts
-                Case "DATE"
-                    ParseDateRow_ToDict data, parts, revLookup
-            End Select
-        End If
+Private Function IsDocumentNumber(ByVal text As String) As Boolean
+    '
+    ' Check if a line looks like a document number
+    ' Pattern: Contains letters/numbers with separators (., -, /)
+    ' Examples: TCE.1234.5678, ABC-DEF-1234, DOC/2024/001
+    '
+    Dim cleanText As String
+    Dim hasLetters As Boolean, hasNumbers As Boolean, hasSeparators As Boolean
+    Dim i As Long, ch As String
+    
+    cleanText = Trim(text)
+    
+    ' Must be between 5 and 50 characters
+    If Len(cleanText) < 5 Or Len(cleanText) > 50 Then
+        IsDocumentNumber = False
+        Exit Function
+    End If
+    
+    ' Check for presence of letters, numbers, and separators
+    For i = 1 To Len(cleanText)
+        ch = Mid(cleanText, i, 1)
+        If ch Like "[A-Za-z]" Then hasLetters = True
+        If ch Like "[0-9]" Then hasNumbers = True
+        If ch = "." Or ch = "-" Or ch = "/" Or ch = "_" Then hasSeparators = True
     Next i
-End Sub
+    
+    ' Document number should have both letters and numbers, plus separators
+    ' OR just numbers with separators (for numeric doc IDs)
+    If (hasLetters And hasNumbers And hasSeparators) Or _
+       (hasNumbers And hasSeparators) Then
+        IsDocumentNumber = True
+    Else
+        IsDocumentNumber = False
+    End If
+    
+End Function
 
-Private Sub Extract_RevisionStatusTable(ByVal doc As Document, ByRef data As Object, ByRef revLookup As Object)
-    Dim t As Table, tbl As Table
-    Dim tmpDoc As Document
-    Dim txt As String, lines() As String, parts() As String
-    Dim i As Long, revNo As String, label As String
-
-    Set tbl = Nothing
-    For Each t In doc.Tables
-        If InStr(1, UCase(t.Range.Text), "REVISION STATUS") > 0 Then
-            Set tbl = t
-            Exit For
-        End If
-    Next t
-    If tbl Is Nothing Then Exit Sub
-
-    Set tmpDoc = Documents.Add
-    tbl.Range.Copy
-    tmpDoc.Range.Paste
-    tmpDoc.Tables(1).ConvertToText Separator:=wdSeparateByTabs
-    txt = tmpDoc.Range.Text
-    tmpDoc.Close SaveChanges:=False
-
-    lines = Split(txt, vbCr)
-
-    For i = 0 To UBound(lines)
-        If Trim(lines(i)) <> "" Then
-            parts = Split(lines(i), vbTab)
-            If UCase(Trim(parts(0))) <> "REV.NO." Then
-                If UBound(parts) >= 2 Then
-                    revNo = Trim(parts(0))
-                    If revLookup.Exists(revNo) Then
-                        label = revLookup(revNo)
-                        If Not data.Exists("DATE_" & label) Or Len(Trim(data("DATE_" & label))) = 0 Then
-                            data("DATE_" & label) = Nz(Trim(parts(1)))
-                        End If
-                        data("DESCRIPTION_" & label) = Nz(Trim(parts(2)))
-                    End If
-                End If
-            End If
-        End If
-    Next i
-End Sub
-
-
-' ==========================================================
-' PARSERS
-' ==========================================================
-Private Sub ParseByRow_ToDict(ByRef data As Object, ByVal key As String, ByRef parts() As String)
-    Dim j As Long, rev As Long, label As String, initials As String
-    rev = 1
-    For j = 1 To UBound(parts) Step 2
-        label = Chr$(64 + rev)
-        initials = Nz(Trim(parts(j)))
-        data(key & "_" & label & "_INITIALS") = initials
-        rev = rev + 1
-    Next j
-End Sub
-
-Private Sub ParseDateRow_ToDict(ByRef data As Object, ByRef parts() As String, ByRef revLookup As Object)
-    Dim j As Long, rev As Long, label As String, revNo As String
-    rev = 1
-    For j = 1 To UBound(parts)
-        label = Chr$(64 + rev)                 ' A, B, C, ...
-        revNo = "R" & rev
-        revLookup(revNo) = label
-        data("REV_NUMBER_" & label) = revNo
-        data("DATE_" & label) = Nz(Trim(parts(j)))
-        rev = rev + 1
-    Next j
-End Sub
+Private Function CleanText(ByVal text As String) As String
+    '
+    ' Remove extra spaces, trim, clean up text
+    '
+    Dim result As String
+    result = Trim(text)
+    
+    ' Replace multiple spaces with single space
+    Do While InStr(result, "  ") > 0
+        result = Replace(result, "  ", " ")
+    Loop
+    
+    CleanText = result
+End Function
 
 
 ' ==========================================================
@@ -247,6 +272,8 @@ End Sub
 Private Sub ReplaceInAllStories(ByVal doc As Document, ByVal findText As String, ByVal replText As String)
     Dim s As Range
     Dim st As Long
+    
+    ' Loop through all story types (1 to 17 covers all standard story ranges)
     For st = wdMainTextStory To wdEvenPagesFooterStory
         On Error Resume Next
         Set s = doc.StoryRanges(st)
@@ -284,12 +311,14 @@ End Sub
 
 Private Sub ReplaceInAllHeaderFooterShapes(ByVal doc As Document, ByVal findText As String, ByVal replText As String)
     Dim sec As Section, hdr As HeaderFooter, ftr As HeaderFooter, shp As Shape
+    
     For Each sec In doc.Sections
         For Each hdr In sec.Headers
             For Each shp In hdr.Shapes
                 ReplaceInShapeRecursive shp, findText, replText
             Next shp
         Next hdr
+        
         For Each ftr In sec.Footers
             For Each shp In ftr.Shapes
                 ReplaceInShapeRecursive shp, findText, replText
@@ -301,6 +330,7 @@ End Sub
 Private Sub ReplaceInShapeRecursive(ByVal shp As Shape, ByVal findText As String, ByVal replText As String)
     Dim g As Shape
     On Error Resume Next
+    
     If shp.Type = msoGroup Then
         For Each g In shp.GroupItems
             ReplaceInShapeRecursive g, findText, replText
@@ -310,17 +340,22 @@ Private Sub ReplaceInShapeRecursive(ByVal shp As Shape, ByVal findText As String
             FindReplaceOnRange shp.TextFrame.TextRange, findText, replText
         End If
     End If
+    
     On Error GoTo 0
 End Sub
 
 
 ' ==========================================================
-' PLACEHOLDER COLLECTOR (so we can clear those not provided)
+' PLACEHOLDER COLLECTOR
 ' ==========================================================
 Private Function CollectPlaceholders(doc As Document) As Collection
+    '
+    ' Find all {{placeholder}} patterns in the document
+    '
     Dim col As New Collection
     Dim seen As Object: Set seen = CreateObject("Scripting.Dictionary")
 
+    ' Search in all story ranges (main text, headers, footers)
     Dim st As Long, r As Range
     For st = wdMainTextStory To wdEvenPagesFooterStory
         On Error Resume Next
@@ -332,21 +367,30 @@ Private Function CollectPlaceholders(doc As Document) As Collection
         On Error GoTo 0
     Next st
 
+    ' Search in shapes
     Dim shp As Shape
     For Each shp In doc.Shapes
-        If shp.TextFrame.HasText Then AddFoundPlaceholders shp.TextFrame.TextRange.Text, col, seen
+        If shp.TextFrame.HasText Then
+            AddFoundPlaceholders shp.TextFrame.TextRange.Text, col, seen
+        End If
     Next shp
 
+    ' Search in header/footer shapes
     Dim sec As Section, hdr As HeaderFooter, ftr As HeaderFooter
     For Each sec In doc.Sections
         For Each hdr In sec.Headers
             For Each shp In hdr.Shapes
-                If shp.TextFrame.HasText Then AddFoundPlaceholders shp.TextFrame.TextRange.Text, col, seen
+                If shp.TextFrame.HasText Then
+                    AddFoundPlaceholders shp.TextFrame.TextRange.Text, col, seen
+                End If
             Next shp
         Next hdr
+        
         For Each ftr In sec.Footers
             For Each shp In ftr.Shapes
-                If shp.TextFrame.HasText Then AddFoundPlaceholders shp.TextFrame.TextRange.Text, col, seen
+                If shp.TextFrame.HasText Then
+                    AddFoundPlaceholders shp.TextFrame.TextRange.Text, col, seen
+                End If
             Next shp
         Next ftr
     Next sec
@@ -355,33 +399,50 @@ Private Function CollectPlaceholders(doc As Document) As Collection
 End Function
 
 Private Sub AddFoundPlaceholders(ByVal s As String, ByRef col As Collection, ByVal seen As Object)
+    '
+    ' Parse text for {{placeholder}} patterns and add unique ones to collection
+    '
     Dim i As Long, j As Long, token As String
+    
     i = 1
     Do
         i = InStr(i, s, "{{")
         If i = 0 Then Exit Do
+        
         j = InStr(i + 2, s, "}}")
         If j = 0 Then Exit Do
+        
         token = Mid$(s, i + 2, j - (i + 2))
+        
         If Len(token) > 0 Then
             If Not seen.Exists(token) Then
                 seen(token) = True
                 col.Add token
             End If
         End If
+        
         i = j + 2
     Loop
 End Sub
 
 
 ' ==========================================================
-' Small helper (Null/Empty safe)
+' Helper Functions
 ' ==========================================================
 Private Function Nz(ByVal v As Variant, Optional ByVal fallback As String = "") As String
+    '
+    ' Null-safe string conversion
+    '
     If IsNull(v) Then
         Nz = fallback
+    ElseIf IsEmpty(v) Then
+        Nz = fallback
     ElseIf VarType(v) = vbString Then
-        Nz = v
+        If Trim(v) = "" Then
+            Nz = fallback
+        Else
+            Nz = v
+        End If
     Else
         Nz = CStr(v)
     End If
