@@ -1,0 +1,465 @@
+Option Explicit
+
+' ======= BEHAVIOR TOGGLES =======
+Private Const ALIGN_BODY_JUSTIFY As Boolean = True
+Private Const HEADING_ALIGN_LEFT As Boolean = True
+Private Const HEADING_KEEP_WITH_NEXT As Boolean = True
+Private Const PAGEBREAK_BEFORE_APPENDIX As Boolean = True
+Private Const FORCE_H2_NOT_BOLD As Boolean = True
+
+' ======= CONTENTS / TOC SETTINGS =======
+Private Const INSERT_CONTENTS_PAGE As Boolean = True
+Private Const TOC_MAX_LEVEL As Long = 1
+Private Const TOC_TITLE As String = "Table of Contents"
+
+' ======= MANUAL-STYLE HEADING INDENT SETTINGS =======
+Private Const HEADING_BASE_INDENT_CM As Double = 0
+Private Const HEADING_LEVEL_STEP_CM As Double = 0.75
+Private Const HEADING_NUMBER_GAP_CM As Double = 1.25
+
+' Body aligns under heading title column
+Private Const BODY_ALIGN_UNDER_HEADING_TITLE As Boolean = True
+
+' ==========================================================
+' PIPELINE ENTRY (called by PipelineMaster)
+' ==========================================================
+Public Sub Code3_BuildDoc_FromXmlText_UsingTemplate_STRICT( _
+        ByVal xmlText As String, _
+        ByVal tplPath As String, _
+        ByVal outPath As String, _
+        ByVal mediaFolder As String, _
+        Optional ByVal ui As Object)
+
+    Application.ScreenUpdating = False
+    Application.DisplayAlerts = wdAlertsNone
+    On Error GoTo CleanFail
+
+    If Len(mediaFolder) > 0 Then
+        If Right$(mediaFolder, 1) <> "\" Then mediaFolder = mediaFolder & "\"
+    End If
+
+    Dim Clean As String
+    Clean = SanitizeXmlText(xmlText)
+
+    Dim dom As Object
+    Set dom = CreateObject("MSXML2.DOMDocument.6.0")
+    dom.async = False
+    dom.validateOnParse = False
+
+    If Not dom.LoadXML(Clean) Then GoTo CleanExit
+
+    Dim body As Object
+    Set body = dom.SelectSingleNode("/document/body")
+    If body Is Nothing Then GoTo CleanExit
+
+    Dim outDoc As Word.Document
+    Set outDoc = Documents.Add(Template:=tplPath, NewTemplate:=False)
+
+    ' Insert TOC if required
+    If INSERT_CONTENTS_PAGE Then
+        InsertManualPageBreak outDoc
+        InsertContentsPage outDoc, TOC_MAX_LEVEL
+        InsertManualPageBreak outDoc
+    Else
+        InsertManualPageBreak outDoc
+    End If
+
+    ' Emit body nodes
+    Dim n As Object
+    For Each n In body.ChildNodes
+        Select Case LCase$(n.nodeName)
+            Case "pb"
+                InsertManualPageBreak outDoc
+            Case "p"
+                If n.HasChildNodes Then
+                    Dim ch As Object
+                    For Each ch In n.ChildNodes
+                        Select Case LCase$(ch.nodeName)
+                            Case "t"
+                                If Len(Trim$(ch.text)) > 0 Then InsertPlainParagraph outDoc, ch.text
+                            Case "img"
+                                InsertImageFromNode outDoc, ch, 0, mediaFolder, ui
+                        End Select
+                    Next ch
+                Else
+                    If Len(Trim$(n.text)) > 0 Then InsertPlainParagraph outDoc, n.text
+                End If
+            Case "table"
+                ProcessXmlTable_STRICT outDoc, n, mediaFolder, ui
+        End Select
+    Next n
+
+    UpdateAllFields outDoc
+    outDoc.SaveAs2 fileName:=outPath, FileFormat:=wdFormatXMLDocument
+    outDoc.Close SaveChanges:=False
+
+CleanExit:
+    Application.DisplayAlerts = wdAlertsAll
+    Application.ScreenUpdating = True
+    Exit Sub
+
+CleanFail:
+    Resume CleanExit
+End Sub
+
+' ==========================================================
+' CONTENTS PAGE (TOC)
+' ==========================================================
+Private Sub InsertContentsPage(ByVal doc As Word.Document, ByVal lowerLevel As Long)
+    Dim p As Word.Paragraph
+    Set p = TCE_AppendPara(doc, TOC_TITLE)
+    p.Range.Style = doc.Styles(wdStyleHeading1)
+    Dim rng As Word.Range
+    Set rng = doc.content
+    rng.Collapse wdCollapseEnd
+    doc.TablesOfContents.Add Range:=rng, UseHeadingStyles:=True, _
+        UpperHeadingLevel:=1, LowerHeadingLevel:=lowerLevel, _
+        RightAlignPageNumbers:=True, IncludePageNumbers:=True, UseHyperlinks:=True
+    TCE_AppendPara doc, ""
+End Sub
+
+' ==========================================================
+' TABLE PROCESSOR (STRICT)
+' ==========================================================
+Private Sub ProcessXmlTable_STRICT(ByVal doc As Word.Document, ByVal tableNode As Object, ByVal mediaFolder As String, Optional ByVal ui As Object)
+    Dim r As Object
+    Dim currentHeadingLevel As Long: currentHeadingLevel = 1
+
+    For Each r In tableNode.SelectNodes("row")
+        Dim cellNodes As Object
+        Set cellNodes = r.SelectNodes("cell")
+        If cellNodes Is Nothing Or cellNodes.Length = 0 Then GoTo NextRow
+
+        Dim rawC1 As String: rawC1 = GetCellTaggedText(cellNodes.Item(0))
+        Dim rawTitle As String: If cellNodes.Length > 1 Then rawTitle = GetCellTaggedText(cellNodes.Item(1)) Else rawTitle = ""
+
+        Dim c1 As String: c1 = StripInlineTags(rawC1)
+        Dim Title As String: Title = StripInlineTags(rawTitle)
+
+        ' Heading row
+        If LooksLikeNumber(c1) And Len(Trim$(Title)) > 0 Then
+            Dim lvl As Long: lvl = LevelFromNumber(c1)
+            If lvl > 0 Then
+                InsertHeading_NumberTabTitle doc, rawC1, rawTitle, lvl
+                currentHeadingLevel = lvl
+                EmitExtraCellsAsBody_NODES doc, cellNodes, 2, TitlePosForLevel(currentHeadingLevel), mediaFolder, ui
+            End If
+            GoTo NextRow
+        End If
+
+        ' Body row
+        Dim lastIdx As Long: lastIdx = LastMeaningfulCellIndex(cellNodes)
+        If lastIdx >= 0 Then
+            InsertCellContentAsBody doc, cellNodes.Item(lastIdx), TitlePosForLevel(currentHeadingLevel), mediaFolder, ui
+        End If
+
+NextRow:
+    Next r
+End Sub
+
+' ==========================================================
+' Helpers (paragraphs, headings, images, tables, etc.)
+' ==========================================================
+Private Sub InsertPlainParagraph(ByVal doc As Word.Document, ByVal textTagged As String)
+    InsertPlainParagraphWithIndent doc, textTagged, 0
+End Sub
+' ==========================================================
+' XML Sanitizer
+' ==========================================================
+Private Function SanitizeXmlText(ByVal xmlText As String) As String
+    Dim t As String, sb As String, ch As String, i As Long
+    t = xmlText
+    sb = ""
+    For i = 1 To Len(t)
+        ch = Mid$(t, i, 1)
+        Select Case AscW(ch)
+            Case 9, 10, 13 ' allow TAB, LF, CR
+                sb = sb & ch
+            Case 32 To 55295, 57344 To 65533
+                sb = sb & ch
+            Case Else
+                ' skip invalid char
+        End Select
+    Next i
+    sb = Replace(sb, vbCr, "")
+    sb = Replace(sb, vbLf, vbCrLf)
+    SanitizeXmlText = Trim$(sb)
+End Function
+
+' ==========================================================
+' Media Path Resolver
+' ==========================================================
+Private Function ResolveMediaPath(ByVal src As String, ByVal mediaFolder As String) As String
+    If Len(mediaFolder) = 0 Then
+        ResolveMediaPath = src
+    Else
+        If Right$(mediaFolder, 1) <> "\" Then mediaFolder = mediaFolder & "\"
+        ResolveMediaPath = mediaFolder & src
+    End If
+End Function
+
+' ==========================================================
+' Insert Tagged Text (handles bold/italic markers)
+' ==========================================================
+Private Sub InsertTaggedTextIntoRange(ByVal rng As Word.Range, ByVal taggedText As String)
+    Dim t As String: t = taggedText
+    t = Replace(t, "{@B@}", "")
+    t = Replace(t, "{@/B@}", "")
+    t = Replace(t, "{@I@}", "")
+    t = Replace(t, "{@/I@}", "")
+    rng.InsertAfter t
+End Sub
+
+' ==========================================================
+' Heading Style Application
+' ==========================================================
+Private Sub ApplyHeadingStyleByLevel(ByVal p As Word.Paragraph, ByVal level As Long)
+    Select Case level
+        Case 1: p.Range.Style = p.Range.Document.Styles(wdStyleHeading1)
+        Case 2: p.Range.Style = p.Range.Document.Styles(wdStyleHeading2)
+        Case 3: p.Range.Style = p.Range.Document.Styles(wdStyleHeading3)
+        Case Else: p.Range.Style = p.Range.Document.Styles(wdStyleHeading1)
+    End Select
+    p.OutlineLevel = level
+End Sub
+
+' ==========================================================
+' Update Fields (TOC refresh)
+' ==========================================================
+Private Sub UpdateAllFields(ByVal doc As Word.Document)
+    Dim f As Field
+    For Each f In doc.Fields
+        f.Update
+    Next f
+End Sub
+
+' ==========================================================
+' Paragraph Helpers
+' ==========================================================
+Private Function TCE_AppendPara(ByVal doc As Word.Document, ByVal text As String) As Word.Paragraph
+    Dim rng As Word.Range
+    Set rng = doc.content
+    rng.Collapse wdCollapseEnd
+    rng.InsertAfter text & vbCr
+    Set TCE_AppendPara = doc.Paragraphs(doc.Paragraphs.Count)
+End Function
+
+Private Function TCE_AppendEmptyPara(ByVal doc As Word.Document) As Word.Paragraph
+    Set TCE_AppendEmptyPara = TCE_AppendPara(doc, "")
+End Function
+
+Private Sub InsertManualPageBreak(ByVal doc As Word.Document)
+    Dim rng As Word.Range
+    Set rng = doc.content
+    rng.Collapse wdCollapseEnd
+    rng.InsertBreak Type:=wdPageBreak
+End Sub
+
+' ==========================================================
+' Table Cell Helpers
+' ==========================================================
+Private Function LastMeaningfulCellIndex(ByVal cellNodes As Object) As Long
+    Dim i As Long
+    For i = cellNodes.Length - 1 To 0 Step -1
+        If CellHasMeaningfulContent(cellNodes.Item(i)) Then
+            LastMeaningfulCellIndex = i
+            Exit Function
+        End If
+    Next i
+    LastMeaningfulCellIndex = -1
+End Function
+
+Private Function CellHasMeaningfulContent(ByVal cellNode As Object) As Boolean
+    If cellNode Is Nothing Then Exit Function
+    If Len(Trim$(cellNode.text)) > 0 Then
+        CellHasMeaningfulContent = True
+    ElseIf CellHasElementChildren(cellNode) Then
+        CellHasMeaningfulContent = True
+    End If
+End Function
+
+Private Function CellHasElementChildren(ByVal cellNode As Object) As Boolean
+    If cellNode Is Nothing Then Exit Function
+    CellHasElementChildren = (cellNode.ChildNodes.Length > 0)
+End Function
+
+Private Function GetCellTaggedText(ByVal cellNode As Object) As String
+    If cellNode Is Nothing Then Exit Function
+    GetCellTaggedText = cellNode.text
+End Function
+
+
+
+Private Sub InsertPlainParagraphWithIndent(ByVal doc As Word.Document, ByVal textTagged As String, ByVal leftIndentPts As Single)
+    Dim p As Word.Paragraph
+    Set p = TCE_AppendEmptyPara(doc)
+    p.Range.Style = doc.Styles(wdStyleNormal)
+    p.OutlineLevel = wdOutlineLevelBodyText
+    If ALIGN_BODY_JUSTIFY Then p.Alignment = wdAlignParagraphJustify
+    If BODY_ALIGN_UNDER_HEADING_TITLE And leftIndentPts > 0 Then
+        p.Format.LeftIndent = leftIndentPts
+        p.Format.FirstLineIndent = 0
+    End If
+    Dim rng As Word.Range
+    Set rng = p.Range
+    rng.End = rng.End - 1
+    rng.text = ""
+    InsertTaggedTextIntoRange rng, textTagged
+End Sub
+
+Private Sub InsertHeading_NumberTabTitle(ByVal doc As Word.Document, ByVal numTextTagged As String, ByVal titleTextTagged As String, ByVal level As Long)
+    Dim p As Word.Paragraph
+    Set p = TCE_AppendEmptyPara(doc)
+    ApplyHeadingStyleByLevel p, level
+    If FORCE_H2_NOT_BOLD And level = 2 Then p.Range.Font.Bold = False
+    If HEADING_ALIGN_LEFT Then p.Alignment = wdAlignParagraphLeft
+    If HEADING_KEEP_WITH_NEXT Then p.KeepWithNext = True
+    Dim rng As Word.Range
+    Set rng = p.Range
+    rng.End = rng.End - 1
+    rng.text = ""
+    InsertTaggedTextIntoRange rng, numTextTagged
+    rng.Collapse wdCollapseEnd
+    rng.InsertAfter vbTab
+    rng.Collapse wdCollapseEnd
+    InsertTaggedTextIntoRange rng, titleTextTagged
+End Sub
+
+Private Sub InsertImageFromNode(ByVal doc As Word.Document, ByVal imgNode As Object, ByVal indentPts As Single, ByVal mediaFolder As String, Optional ByVal ui As Object)
+    On Error GoTo SafeExit
+
+    Dim src As String: src = ""
+    On Error Resume Next
+    src = CStr(imgNode.Attributes.getNamedItem("src").text)
+    On Error GoTo 0
+    If Len(src) = 0 Then GoTo SafeExit
+
+    Dim fullPath As String
+    fullPath = ResolveMediaPath(src, mediaFolder)
+    If Len(Dir$(fullPath)) = 0 Then GoTo SafeExit
+
+    ' Create a dedicated paragraph to host the image
+    Dim p As Word.Paragraph
+    Set p = TCE_AppendEmptyPara(doc)
+
+    ' Align body under title column if needed
+    On Error Resume Next
+    p.OutlineLevel = wdOutlineLevelBodyText
+    If BODY_ALIGN_UNDER_HEADING_TITLE And indentPts > 0 Then
+        p.Format.LeftIndent = indentPts
+        p.Format.FirstLineIndent = 0
+    End If
+    ' Center the image paragraph
+    p.Alignment = wdAlignParagraphCenter
+    On Error GoTo 0
+
+    Dim rng As Word.Range
+    Set rng = p.Range
+    rng.End = rng.End - 1
+    rng.text = ""
+
+    Dim ils As InlineShape
+    Set ils = doc.InlineShapes.AddPicture(fileName:=fullPath, LinkToFile:=False, SaveWithDocument:=True, Range:=rng)
+
+    ' Optional width/height attributes
+    Dim w As Double, h As Double
+    w = 0: h = 0
+    On Error Resume Next
+    If Not imgNode.Attributes.getNamedItem("w") Is Nothing Then w = CDbl(imgNode.Attributes.getNamedItem("w").text)
+    If Not imgNode.Attributes.getNamedItem("h") Is Nothing Then h = CDbl(imgNode.Attributes.getNamedItem("h").text)
+    On Error GoTo 0
+
+    ils.LockAspectRatio = msoTrue
+
+    ' Max width = printable width minus current paragraph left indent
+    Dim maxW As Double
+    maxW = doc.PageSetup.PageWidth - doc.PageSetup.LeftMargin - doc.PageSetup.RightMargin - p.Format.LeftIndent
+    If maxW < 36 Then maxW = 36 ' safety
+
+    If w > 0 Then ils.Width = w
+    If h > 0 Then ils.Height = h
+
+    If ils.Width > maxW Then ils.Width = maxW
+
+    ' Add spacing before/after
+    p.SpaceBefore = 6
+    p.SpaceAfter = 6
+
+SafeExit:
+End Sub
+' ==========================================================
+' Nested table insertion
+' ==========================================================
+Private Sub InsertNestedTableFromNode(ByVal doc As Word.Document, ByVal tableNode As Object, ByVal indentPts As Single, ByVal mediaFolder As String, Optional ByVal ui As Object)
+    Dim insertAt As Word.Range
+    Set insertAt = doc.content
+    insertAt.Collapse wdCollapseEnd
+
+    Dim t As Word.Table
+    Set t = BuildWordTableFromXml_AtRange(doc, tableNode, insertAt, mediaFolder, ui)
+
+    If t Is Nothing Then Exit Sub
+
+    On Error Resume Next
+    t.rows.LeftIndent = indentPts
+    On Error GoTo 0
+
+    TCE_AppendPara doc, ""
+End Sub
+
+Private Function BuildWordTableFromXml_AtRange( _
+    ByVal doc As Word.Document, _
+    ByVal tableNode As Object, _
+    ByVal insertAt As Word.Range, _
+    ByVal mediaFolder As String, _
+    Optional ByVal ui As Object) As Word.Table
+
+    On Error GoTo Fail
+
+    Dim rowNodes As Object
+    Set rowNodes = tableNode.SelectNodes("row")
+    If rowNodes Is Nothing Or rowNodes.Length = 0 Then Exit Function
+
+    Dim rCount As Long: rCount = rowNodes.Length
+    Dim maxCols As Long: maxCols = 0
+
+    Dim i As Long
+    For i = 0 To rCount - 1
+        Dim cn As Object
+        Set cn = rowNodes.Item(i).SelectNodes("cell")
+        If Not cn Is Nothing Then
+            If cn.Length > maxCols Then maxCols = cn.Length
+        End If
+    Next i
+    If maxCols = 0 Then Exit Function
+
+    insertAt.Collapse wdCollapseStart
+    Dim wdTbl As Word.Table
+    Set wdTbl = doc.Tables.Add(Range:=insertAt, NumRows:=rCount, NumColumns:=maxCols)
+
+    Dim rr As Long, cc As Long
+    For rr = 1 To rCount
+        Dim rowXml As Object
+        Set rowXml = rowNodes.Item(rr - 1)
+        Dim cNodes As Object
+        Set cNodes = rowXml.SelectNodes("cell")
+
+        For cc = 1 To maxCols
+            Dim destCell As Word.Cell
+            Set destCell = wdTbl.Cell(rr, cc)
+            destCell.Range.text = ""
+            If Not cNodes Is Nothing Then
+                If cc - 1 <= cNodes.Length - 1 Then
+                    InsertCellContentIntoRange destCell.Range, cNodes.Item(cc - 1), mediaFolder, ui
+                End If
+            End If
+        Next cc
+    Next rr
+
+    Set BuildWordTableFromXml_AtRange = wdTbl
+    Exit Function
+
+Fail:
+    If Not ui Is Nothing Then ui.UI_Log "Nested table build failed: " & Err.Number & " - " & Err.Description
+End Function
+

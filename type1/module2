@@ -1,0 +1,340 @@
+Option Explicit
+
+' ==========================================================
+' Module 2: Extract content into XML from page 2 to end
+' ==========================================================
+
+' === ENTRY used by PipelineMaster ===
+Public Function Code2_CreateXmlText_FromOpenDoc(ByVal src As Document, ByVal mediaFolder As String) As String
+
+    If src.ComputeStatistics(wdStatisticPages) < 2 Then
+        Code2_CreateXmlText_FromOpenDoc = ""
+        Exit Function
+    End If
+
+    If Len(mediaFolder) > 0 Then
+        If Right$(mediaFolder, 1) <> "\" Then mediaFolder = mediaFolder & "\"
+    End If
+
+    Dim bodyRng As Range
+    Set bodyRng = RangeFromPageToEnd(src, 2)
+
+    If bodyRng Is Nothing Then
+        Code2_CreateXmlText_FromOpenDoc = ""
+        Exit Function
+    End If
+
+    If Len(Trim$(bodyRng.text)) = 0 And bodyRng.Tables.Count = 0 Then
+        Code2_CreateXmlText_FromOpenDoc = ""
+        Exit Function
+    End If
+
+    Code2_CreateXmlText_FromOpenDoc = BuildXmlFromRange_Structured(src, bodyRng, mediaFolder)
+End Function
+
+Private Function BuildXmlFromRange_Structured(ByVal src As Document, ByVal r As Range, ByVal mediaFolder As String) As String
+    Dim sb As New VBA.Collection
+    Dim imgCounter As Long: imgCounter = 0
+
+    sb.Add "<?xml version=""1.0"" encoding=""UTF-8""?>" & vbLf
+    sb.Add "<document source=""" & X(src.FullName) & """ generated=""" & X(Format$(Now, "yyyy-mm-dd\THH:nn:ss")) & """>" & vbLf
+    sb.Add "  <body startPage=""2"">" & vbLf
+
+    Dim blocks As Collection: Set blocks = New Collection
+
+    ' Non-table paragraphs
+    Dim p As Paragraph
+    For Each p In r.Paragraphs
+        If Not p.Range.Information(wdWithInTable) Then
+            InsertBlockSortedWithPage blocks, "p", p.Range.Start, PageOfRange(p.Range), p
+        End If
+    Next p
+
+    ' Top-level tables
+    Dim t As Table
+    For Each t In r.Tables
+        If t.NestingLevel = 1 Then
+            If t.Range.Start >= r.Start And t.Range.End <= r.End + 2 Then
+                InsertBlockSortedWithPage blocks, "t", t.Range.Start, PageOfRange(t.Range), t
+            End If
+        End If
+    Next t
+
+    ' Emit in source order
+    Dim i As Long, prevPage As Long: prevPage = 0
+    For i = 1 To blocks.Count
+        Dim page As Long: page = CLng(blocks(i)("page"))
+        If prevPage > 0 And page > prevPage Then sb.Add "    <pb/>" & vbLf
+        prevPage = page
+
+        Dim kind As String: kind = blocks(i)("kind")
+        If kind = "p" Then
+            Dim prng As Range: Set prng = blocks(i)("obj").Range
+            Dim pxml As String: pxml = SerializeParaWithImages(prng, mediaFolder, imgCounter)
+            If Len(Trim$(pxml)) > 0 Then sb.Add "    <p>" & pxml & "</p>" & vbLf
+        ElseIf kind = "t" Then
+            Dim tb As Table: Set tb = blocks(i)("obj")
+            sb.Add TableToXml_Structured(tb, mediaFolder, imgCounter)
+        End If
+    Next i
+
+    sb.Add "  </body>" & vbLf
+    sb.Add "</document>" & vbLf
+
+    BuildXmlFromRange_Structured = JoinCollection(sb)
+End Function
+
+' ==========================================================
+' Table serialization with border detection
+' ==========================================================
+Private Function TableToXml_Structured(ByVal tb As Table, ByVal mediaFolder As String, ByRef imgCounter As Long) As String
+    Dim sb As New VBA.Collection
+
+    ' Border detection
+    Dim borderAttr As String
+    If tb.Borders.Enable = 0 Then
+        borderAttr = "none"
+    Else
+        borderAttr = "yes"
+    End If
+
+    sb.Add "    <table border=""" & borderAttr & """>" & vbLf
+
+    Dim currentRow As Long: currentRow = -1
+    Dim cel As Cell
+
+    For Each cel In tb.Range.cells
+        Dim rIdx As Long: rIdx = cel.rowIndex
+        If rIdx <> currentRow Then
+            If currentRow <> -1 Then sb.Add "      </row>" & vbLf
+            sb.Add "      <row>" & vbLf
+            currentRow = rIdx
+        End If
+        Dim cellXml As String
+        cellXml = SerializeCellContent(cel.Range, tb.Range.Start, tb.Range.End, mediaFolder, imgCounter)
+        sb.Add "        <cell>" & cellXml & "</cell>" & vbLf
+    Next cel
+
+    If currentRow <> -1 Then sb.Add "      </row>" & vbLf
+    sb.Add "    </table>" & vbLf
+
+    TableToXml_Structured = JoinCollection(sb)
+End Function
+
+' ==========================================================
+' Serialize cell content (text, images, nested tables)
+' ==========================================================
+Private Function SerializeCellContent(ByVal cellRng As Range, ByVal parentTblStart As Long, ByVal parentTblEnd As Long, _
+                                     ByVal mediaFolder As String, ByRef imgCounter As Long) As String
+    Dim sb As New VBA.Collection
+
+    Dim taggedText As String
+    taggedText = CleanMeaningless(CellMarkupFromRange(cellRng))
+    If Len(taggedText) > 0 Then sb.Add "<t>" & X(taggedText) & "</t>"
+
+    Dim ils As InlineShape
+    For Each ils In cellRng.InlineShapes
+        Dim imgName As String
+        imgName = ExportInlineShapeToMedia(ils, mediaFolder, imgCounter)
+        If Len(imgName) > 0 Then
+            sb.Add "<img src=""" & X(imgName) & """ w=""" & X(FNum(ils.Width)) & """ h=""" & X(FNum(ils.Height)) & """/>"
+        End If
+    Next ils
+
+    Dim nt As Table
+    For Each nt In cellRng.Tables
+        If Not (nt.Range.Start = parentTblStart And nt.Range.End = parentTblEnd) Then
+            Dim cellEndSafe As Long: cellEndSafe = cellRng.End + 2
+            If nt.Range.Start >= cellRng.Start And nt.Range.End <= cellEndSafe Then
+                sb.Add TableToXml_Structured(nt, mediaFolder, imgCounter)
+            End If
+        End If
+    Next nt
+
+    SerializeCellContent = JoinCollectionInline(sb)
+End Function
+
+' ==========================================================
+' Helpers (text cleaning, XML escaping, image export, etc.)
+' ==========================================================
+Private Function CleanMeaningless(ByVal s As String) As String
+    Dim t As String: t = s
+    t = Replace$(t, Chr$(7), "")
+    t = Replace$(t, vbCr, "")
+    t = Replace$(t, vbLf, "")
+    t = SanitizeText(t)
+    t = StripInlineTags(t)
+    t = Trim$(t)
+    If t = "/" Or t = "-" Or t = "•" Then t = ""
+    CleanMeaningless = t
+End Function
+
+Private Function StripInlineTags(ByVal s As String) As String
+    s = Replace$(s, "{@B@}", "")
+    s = Replace$(s, "{@/B@}", "")
+    s = Replace$(s, "{@I@}", "")
+    s = Replace$(s, "{@/I@}", "")
+    StripInlineTags = s
+End Function
+
+Private Function SanitizeText(ByVal s As String) As String
+    Dim t As String: t = Replace$(s, vbCr, "")
+    t = Replace$(t, vbLf, " ")
+    t = Replace$(t, vbFormFeed, "")
+    Dim re As Object: Set re = CreateObject("VBScript.RegExp")
+    re.Global = True: re.Pattern = "\s+"
+    SanitizeText = Trim$(re.Replace(t, " "))
+End Function
+
+Private Function X(ByVal s As String) As String
+    s = Replace(s, "&", "&amp;")
+    s = Replace(s, "<", "&lt;")
+    s = Replace(s, ">", "&gt;")
+    s = Replace(s, """", "&quot;")
+    s = Replace(s, "'", "&apos;")
+    X = s
+End Function
+
+Private Function JoinCollection(ByVal c As VBA.Collection) As String
+    Dim i As Long, s As String
+    For i = 1 To c.Count
+        s = s & CStr(c(i))
+    Next i
+    JoinCollection = s
+End Function
+
+Private Function JoinCollectionInline(ByVal c As VBA.Collection) As String
+    Dim i As Long, s As String
+    s = ""
+    For i = 1 To c.Count
+        s = s & CStr(c(i))
+    Next i
+    JoinCollectionInline = s
+End Function
+
+Private Function FNum(ByVal v As Double) As String
+    Dim s As String
+    s = Format$(v, "0.##")
+    s = Replace$(s, ",", ".")
+    FNum = s
+End Function
+
+Private Function SerializeParaWithImages(ByVal prng As Range, ByVal mediaFolder As String, ByRef imgCounter As Long) As String
+    Dim sb As New VBA.Collection
+
+    ' TEXT
+    Dim t As String
+    t = prng.text
+    t = Replace$(t, vbCr, "")
+    t = Replace$(t, vbFormFeed, "")
+    t = Trim$(t)
+
+    ' Drop trivial fillers
+    If Len(t) > 0 Then
+        If t = "/" Or t = "-" Or t = "•" Then t = ""
+    End If
+
+    If Len(t) > 0 Then sb.Add "<t>" & X(t) & "</t>"
+
+    ' IMAGES
+    Dim ils As InlineShape
+    For Each ils In prng.InlineShapes
+        Dim imgName As String
+        imgName = ExportInlineShapeToMedia(ils, mediaFolder, imgCounter)
+        If Len(imgName) > 0 Then
+            sb.Add "<img src=""" & X(imgName) & """ w=""" & X(FNum(ils.Width)) & """ h=""" & X(FNum(ils.Height)) & """/>"
+        End If
+    Next ils
+
+    SerializeParaWithImages = JoinCollectionInline(sb)
+End Function
+
+' ==========================================================
+' Range helper: page 2 to end
+' ==========================================================
+Private Function RangeFromPageToEnd(ByVal doc As Document, ByVal pageNum As Long) As Range
+    Dim r As Range
+    On Error Resume Next
+    Set r = doc.GoTo(What:=wdGoToPage, Which:=wdGoToAbsolute, Count:=pageNum)
+    On Error GoTo 0
+    If r Is Nothing Then Exit Function
+
+    Dim res As Range
+    Set res = doc.Range(Start:=r.Start, End:=doc.content.End)
+    Set RangeFromPageToEnd = res
+End Function
+
+' ==========================================================
+' Image export helpers
+' ==========================================================
+Private Function ExportInlineShapeToMedia(ByVal ils As InlineShape, ByVal mediaFolder As String, ByRef imgCounter As Long) As String
+    On Error GoTo Fail
+
+    imgCounter = imgCounter + 1
+    Dim baseName As String
+    baseName = "img_" & Format$(imgCounter, "0000")
+
+    ils.Range.Select
+    Selection.CopyAsPicture
+
+    ExportInlineShapeToMedia = ExportClipboardPictureToMedia_STRICT(mediaFolder, baseName)
+    Exit Function
+
+Fail:
+    ExportInlineShapeToMedia = ""
+End Function
+
+Private Function ExportClipboardPictureToMedia_STRICT(ByVal mediaFolder As String, ByVal baseName As String) As String
+    On Error GoTo Fail
+
+    Dim fs As Object: Set fs = CreateObject("Scripting.FileSystemObject")
+    If Right$(mediaFolder, 1) <> "\" Then mediaFolder = mediaFolder & "\"
+
+    Dim tmpDoc As Document
+    Set tmpDoc = Documents.Add(Visible:=False)
+    tmpDoc.Range(0, 0).PasteSpecial DataType:=wdPasteEnhancedMetafile
+
+    Dim tempBase As String
+    tempBase = Environ$("TEMP") & "\imgexp_" & Format$(Now, "yyyymmdd_hhnnss") & "_" & baseName
+    Dim htmlPath As String: htmlPath = tempBase & ".htm"
+
+    Application.DisplayAlerts = wdAlertsNone
+    tmpDoc.SaveAs2 fileName:=htmlPath, FileFormat:=wdFormatFilteredHTML
+    tmpDoc.Close SaveChanges:=False
+    Application.DisplayAlerts = wdAlertsAll
+
+    Dim filesFolder As String: filesFolder = tempBase & "_files"
+    If Not fs.FolderExists(filesFolder) Then GoTo Cleanup
+
+    Dim f As Object, chosen As Object
+    Set chosen = Nothing
+    For Each f In fs.GetFolder(filesFolder).Files
+        Dim ext As String: ext = LCase$(fs.GetExtensionName(f.Name))
+        If ext = "png" Or ext = "jpg" Or ext = "jpeg" Or ext = "gif" Or ext = "bmp" Or ext = "wmf" Or ext = "emf" Then
+            Set chosen = f
+            Exit For
+        End If
+    Next f
+
+    If chosen Is Nothing Then GoTo Cleanup
+
+    Dim outName As String
+    outName = baseName & "." & LCase$(fs.GetExtensionName(chosen.Name))
+    fs.CopyFile chosen.path, mediaFolder & outName, True
+    ExportClipboardPictureToMedia_STRICT = outName
+
+Cleanup:
+    On Error Resume Next
+    If fs.FileExists(htmlPath) Then fs.DeleteFile htmlPath, True
+    If fs.FileExists(tempBase & ".html") Then fs.DeleteFile tempBase & ".html", True
+    If fs.FolderExists(filesFolder) Then fs.DeleteFolder filesFolder, True
+    On Error GoTo 0
+    Exit Function
+
+Fail:
+    On Error Resume Next
+    If Not tmpDoc Is Nothing Then tmpDoc.Close SaveChanges:=False
+    Application.DisplayAlerts = wdAlertsAll
+    ExportClipboardPictureToMedia_STRICT = ""
+End Function
+

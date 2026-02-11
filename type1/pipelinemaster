@@ -1,0 +1,310 @@
+Option Explicit
+
+'==========================================================
+' SETTINGS
+'==========================================================
+Private Const CREATE_FINAL_WHEN_NO_XML As Boolean = True
+Private Const SAVE_XML_TO_OUTPUT As Boolean = True          ' keep XML files
+
+'==========================================================
+' Batch Runner (NO MsgBox — uses UI status/log)
+'==========================================================
+Public Sub Sumit_RunBatch(ByVal inFolder As String, ByVal outFolder As String, ByVal baseTemplatePath As String, Optional ByVal ui As Object)
+
+    Dim fs As Object, folder As Object, f As Object
+    Set fs = CreateObject("Scripting.FileSystemObject")
+
+    If Right$(inFolder, 1) <> "\" Then inFolder = inFolder & "\"
+    If Right$(outFolder, 1) <> "\" Then outFolder = outFolder & "\"
+
+    If Not fs.FolderExists(inFolder) Then
+        If Not ui Is Nothing Then ui.UI_SetStatus "ERROR: Input folder not found."
+        If Not ui Is Nothing Then ui.UI_Log "ERROR: Input folder not found: " & inFolder
+        Exit Sub
+    End If
+
+    If Not fs.FolderExists(outFolder) Then
+        If Not ui Is Nothing Then ui.UI_SetStatus "ERROR: Output folder not found."
+        If Not ui Is Nothing Then ui.UI_Log "ERROR: Output folder not found: " & outFolder
+        Exit Sub
+    End If
+
+    If Not fs.FileExists(baseTemplatePath) Then
+        If Not ui Is Nothing Then ui.UI_SetStatus "ERROR: Template file not found."
+        If Not ui Is Nothing Then ui.UI_Log "ERROR: Template file not found: " & baseTemplatePath
+        Exit Sub
+    End If
+
+    Set folder = fs.GetFolder(inFolder)
+
+    Dim total As Long: total = 0
+    For Each f In folder.Files
+        If IsSupportedWordFile(f.Name) Then
+            If Left$(f.Name, 2) <> "~$" Then
+                If LCase$(f.path) <> LCase$(baseTemplatePath) Then total = total + 1
+            End If
+        End If
+    Next f
+
+    Application.ScreenUpdating = False
+    Application.DisplayAlerts = wdAlertsNone
+
+    On Error Resume Next
+    Application.StatusBar = "Batch started..."
+    On Error GoTo CleanFail
+
+    Dim idx As Long: idx = 0
+    Dim processed As Long: processed = 0
+
+    For Each f In folder.Files
+        If IsSupportedWordFile(f.Name) Then
+            If Left$(f.Name, 2) <> "~$" Then
+                If LCase$(f.path) <> LCase$(baseTemplatePath) Then
+
+                    If Not ui Is Nothing Then
+                        If ui.CancelRequested Then
+                            ui.UI_Log "Batch cancelled by user."
+                            ui.UI_SetStatus "Cancelled."
+                            On Error Resume Next
+                            Application.StatusBar = False
+                            On Error GoTo 0
+                            GoTo CleanExit
+                        End If
+                    End If
+
+                    idx = idx + 1
+
+                    If Not ui Is Nothing Then
+                        ui.UI_SetStatus "Processing " & idx & " / " & total
+                        ui.UI_Log "----------------------------------------"
+                        ui.UI_Log "File: " & f.Name
+                        DoEvents
+                    End If
+
+                    On Error Resume Next
+                    Application.StatusBar = "Processing " & idx & "/" & total & " : " & f.Name
+                    On Error GoTo 0
+
+                    ProcessOneFile_EndToEnd f.path, outFolder, baseTemplatePath, ui
+                    processed = processed + 1
+
+                    If Not ui Is Nothing Then ui.UI_Progress idx, total
+
+                End If
+            End If
+        End If
+    Next f
+
+    If Not ui Is Nothing Then
+        ui.UI_Progress total, total
+        ui.UI_SetStatus "Completed " & processed & " file(s)."
+        ui.UI_Log "Completed " & processed & " file(s)."
+    End If
+
+CleanExit:
+    On Error Resume Next
+    Application.StatusBar = False
+    Application.DisplayAlerts = wdAlertsAll
+    Application.ScreenUpdating = True
+    On Error GoTo 0
+    Exit Sub
+
+CleanFail:
+    If Not ui Is Nothing Then
+        ui.UI_SetStatus "ERROR: " & Err.Description
+        ui.UI_Log "ERROR " & Err.Number & ": " & Err.Description
+    End If
+    Resume CleanExit
+End Sub
+
+'==========================================================
+' One file end-to-end with UI logging
+'==========================================================
+Private Sub ProcessOneFile_EndToEnd(ByVal srcPath As String, ByVal outFolder As String, ByVal baseTemplatePath As String, Optional ByVal ui As Object)
+
+    Dim fs As Object: Set fs = CreateObject("Scripting.FileSystemObject")
+    Dim baseName As String: baseName = fs.GetBaseName(srcPath)
+
+    If Right$(outFolder, 1) <> "\" Then outFolder = outFolder & "\"
+
+    Dim filledTemplatePath As String
+    filledTemplatePath = Environ$("TEMP") & "\" & baseName & "_filledTemplate.docx"
+
+    Dim finalDocPath As String
+    finalDocPath = UniqueDocxPath(outFolder & baseName & "_FINAL.docx")
+
+    Dim xmlOutPath As String
+    xmlOutPath = UniqueXmlPath(outFolder & baseName & "_BODY.xml")
+
+    Dim mediaFolder As String
+    mediaFolder = outFolder & baseName & "_MEDIA\"
+    On Error Resume Next
+    If Not fs.FolderExists(mediaFolder) Then fs.CreateFolder mediaFolder
+    On Error GoTo 0
+
+    If Not ui Is Nothing Then
+        ui.UI_Log "Final output path: " & finalDocPath
+        ui.UI_Log "Media folder: " & mediaFolder
+    End If
+
+    On Error GoTo FailOne
+
+    ' ---------- OPEN SOURCE ----------
+    Dim srcDoc As Document
+    Set srcDoc = Documents.Open(fileName:=srcPath, ReadOnly:=True, Visible:=False, AddToRecentFiles:=False)
+
+    On Error Resume Next
+    If srcDoc.Windows.Count > 0 Then srcDoc.Windows(1).Visible = False
+    On Error GoTo 0
+
+    ' Safe Repaginate
+    On Error Resume Next
+    srcDoc.Repaginate
+    On Error GoTo FailOne
+
+    ' ---------- CODE 1: EXTRACT DATA ----------
+    Dim data As Object, revLookup As Object
+    Set data = CreateObject("Scripting.Dictionary")
+    Set revLookup = CreateObject("Scripting.Dictionary")
+    data.CompareMode = vbTextCompare
+    revLookup.CompareMode = vbTextCompare
+
+    Code1_ExtractData_FromOpenDoc srcDoc, data, revLookup
+
+    Dim debugPath As String
+    debugPath = outFolder & baseName & "_EXTRACTED.txt"
+    SaveDictionaryToTextFile debugPath, data
+
+    ' ---------- CODE 2: XML + IMAGE EXPORT ----------
+    Dim xmlText As String
+    xmlText = Code2_CreateXmlText_FromOpenDoc(srcDoc, mediaFolder)
+
+    If Len(xmlText) > 0 Then
+        xmlText = NormalizeXml_TableRows(xmlText)
+    End If
+
+    If SAVE_XML_TO_OUTPUT And Len(xmlText) > 0 Then
+        WriteUtf8TextFile xmlOutPath, xmlText
+    End If
+
+    srcDoc.Close SaveChanges:=False
+    Set srcDoc = Nothing
+
+    ' ---------- CODE 1: FILL TEMPLATE ----------
+    Code1_FillTemplate_FromData_ToPath baseTemplatePath, data, filledTemplatePath
+
+    ' ---------- If XML is empty ----------
+    If Len(xmlText) = 0 Then
+        If CREATE_FINAL_WHEN_NO_XML Then
+            FileCopy filledTemplatePath, finalDocPath
+        End If
+        On Error Resume Next
+        If Len(Dir$(filledTemplatePath)) > 0 Then Kill filledTemplatePath
+        On Error GoTo 0
+        Exit Sub
+    End If
+
+    ' ---------- CODE 3: FINAL DOC ----------
+    Code3_BuildDoc_FromXmlText_UsingTemplate_STRICT xmlText, filledTemplatePath, finalDocPath, mediaFolder, ui
+
+    On Error Resume Next
+    If Len(Dir$(filledTemplatePath)) > 0 Then Kill filledTemplatePath
+    On Error GoTo 0
+    Exit Sub
+
+FailOne:
+    If Not ui Is Nothing Then
+        ui.UI_Log "ERROR in: " & fs.GetFileName(srcPath)
+        ui.UI_Log "ERROR " & Err.Number & ": " & Err.Description
+        ui.UI_SetStatus "ERROR: " & fs.GetFileName(srcPath)
+    End If
+
+    On Error Resume Next
+    If Not srcDoc Is Nothing Then srcDoc.Close SaveChanges:=False
+    If Len(Dir$(filledTemplatePath)) > 0 Then Kill filledTemplatePath
+    On Error GoTo 0
+End Sub
+
+'==========================================================
+' Helpers
+'==========================================================
+Private Function IsSupportedWordFile(ByVal fileName As String) As Boolean
+    Dim ext As String
+    ext = LCase$(Mid$(fileName, InStrRev(fileName, ".") + 1))
+    IsSupportedWordFile = (ext = "doc" Or ext = "docx" Or ext = "docm")
+End Function
+
+Private Function UniqueDocxPath(ByVal desiredPath As String) As String
+    Dim fs As Object
+    Set fs = CreateObject("Scripting.FileSystemObject")
+    If Len(Dir$(desiredPath)) = 0 Then
+        UniqueDocxPath = desiredPath
+        Exit Function
+    End If
+
+    Dim folder As String, base As String, i As Long
+    folder = fs.GetParentFolderName(desiredPath)
+    base = fs.GetBaseName(desiredPath)
+
+    i = 2
+    Do
+        UniqueDocxPath = folder & "\" & base & "_" & i & ".docx"
+        If Len(Dir$(UniqueDocxPath)) = 0 Then Exit Function
+        i = i + 1
+    Loop
+End Function
+
+Private Function UniqueXmlPath(ByVal desiredPath As String) As String
+    Dim fs As Object: Set fs = CreateObject("Scripting.FileSystemObject")
+
+    If Len(Dir$(desiredPath)) = 0 Then
+        UniqueXmlPath = desiredPath
+        Exit Function
+    End If
+
+    Dim folder As String, base As String, i As Long
+    folder = fs.GetParentFolderName(desiredPath)
+    base = fs.GetBaseName(desiredPath)
+
+    i = 2
+    Do
+        UniqueXmlPath = folder & "\" & base & "_" & i & ".xml"
+        If Len(Dir$(UniqueXmlPath)) = 0 Then Exit Function
+        i = i + 1
+    Loop
+End Function
+
+Private Sub WriteUtf8TextFile(ByVal path As String, ByVal content As String)
+    Dim stm As Object: Set stm = CreateObject("ADODB.Stream")
+    With stm
+        .Type = 2
+        .charset = "utf-8"
+        .Open
+        .WriteText content
+        .SaveToFile path, 2
+        .Close
+    End With
+End Sub
+
+Private Sub SaveDictionaryToTextFile(ByVal path As String, ByVal dict As Object)
+    Dim sb As String, k As Variant
+    sb = "Key" & vbTab & "Value" & vbCrLf
+    sb = sb & String(80, "-") & vbCrLf
+
+    For Each k In dict.Keys
+        sb = sb & CStr(k) & vbTab & CStr(dict(k)) & vbCrLf
+    Next k
+
+    WriteUtf8TextFile path, sb
+End Sub
+
+' Optional entry point if you want in macro list
+Public Sub Launch_Batch()
+    UserForm1.Show
+End Sub
+
+Public Function NormalizeXml_TableRows(ByVal xmlText As String) As String
+    ' Minimal normalizer: keep XML as-is
+    NormalizeXml_TableRows = xmlText
+End Function
+
