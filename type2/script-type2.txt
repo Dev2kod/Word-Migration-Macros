@@ -1,180 +1,456 @@
+
 Option Explicit
 
-Sub ConvertInputToTemplate()
+' ============================================================
+' STRICT XML ? Word (as per rules)
+' - Headings ONLY from table rows where FIRST CELL is a number.
+' - Heading 1  = X.0 only   (1.0, 2.0, 3.0, …)
+' - Heading 2  = X.Y (Y>0)  (1.1, 1.2, 2.1, 2.2, …)
+' - Heading 3  = X.Y.Z (+ deeper)
+' - Heading text = cells 2..n concatenated (no number in text).
+' - <p> nodes and rows with empty/non-numeric cell-1 ? body paragraphs.
+' - Body paragraphs: Body Text/Normal, List removed, Outline=Body.
+' - Template page-1 preserved; content starts after a page break.
+' - XML sanitized before parsing (control chars, raw '&', etc.).
+' ============================================================
 
-    Dim inputDoc As Document
-    Dim templateDoc As Document
-    Dim outputDoc As Document
+Public Sub BuildDoc_FromXml_UsingTemplate_STRICT()
+    Dim xmlPath As String, tplPath As String, outPath As String
+    xmlPath = PickOneXml("Select input XML")
+    If Len(xmlPath) = 0 Then Exit Sub
 
-    Dim inputPath As String
-    Dim templatePath As String
-    Dim savePath As String
+    tplPath = PickTemplateDocOrDotx("Select your TEMPLATE (.docx / .dotx)")
+    If Len(tplPath) = 0 Then Exit Sub
 
-    Dim para As Paragraph
-    Dim targetRange As Range
-    Dim textLine As String
-    Dim cleanText As String
+    outPath = PickSaveDocx("Save output as (.docx)")
+    If Len(outPath) = 0 Then Exit Sub
 
-    '---------------------------
-    ' Pick files
-    '---------------------------
-    inputPath = GetFilePath("Select INPUT Word file")
-    If inputPath = "" Then Exit Sub
+    Application.ScreenUpdating = False
+    Application.DisplayAlerts = wdAlertsNone
+    On Error GoTo CleanFail
 
-    templatePath = GetFilePath("Select TEMPLATE Word file")
-    If templatePath = "" Then Exit Sub
+    ' 1) Load sanitized XML into DOM
+    Dim dom As Object
+    Set dom = LoadDomFromXmlFileSafe(xmlPath)
+    If dom Is Nothing Then GoTo CleanExit
 
-    savePath = GetSavePath()
-    If savePath = "" Then Exit Sub
+    Dim body As Object
+    Set body = dom.SelectSingleNode("/document/body")
+    If body Is Nothing Then
+        MsgBox "XML error: <document><body> not found.", vbCritical
+        GoTo CleanExit
+    End If
 
-    '---------------------------
-    ' Open documents
-    '---------------------------
-    Set inputDoc = Documents.Open(inputPath, ReadOnly:=True)
+    ' 2) Create new doc from template; keep page-1 intact and start body on a new page
+    Dim outDoc As Word.Document, atEnd As Word.Range
+    Set outDoc = Documents.Add(Template:=tplPath, NewTemplate:=False)
+    Set atEnd = outDoc.content
+    atEnd.Collapse wdCollapseEnd
+    atEnd.InsertBreak wdPageBreak
+    atEnd.Collapse wdCollapseEnd
 
-    Set templateDoc = Documents.Open(templatePath)
-    templateDoc.SaveAs2 savePath
-    Set outputDoc = ActiveDocument
+    ' 3) Emit XML in order
+    Dim n As Object
+    For Each n In body.ChildNodes
+        Select Case LCase$(n.nodeName)
+            Case "p"
+                ' <p> is ALWAYS body text (never promoted to heading)
+                Dim txt As String
+                txt = Trim$(Replace(n.text, vbFormFeed, ""))
+                If Len(txt) > 0 Then InsertPlainParagraph outDoc, txt
 
-    '---------------------------
-    ' Start writing AFTER page 2
-    ' (i.e. Page 3)
-    '---------------------------
-    Set targetRange = outputDoc.GoTo(What:=wdGoToPage, _
-                                     Which:=wdGoToAbsolute, _
-                                     Count:=3)
-    targetRange.Collapse wdCollapseStart
+            Case "table"
+                ProcessXmlTable_STRICT outDoc, n
 
-    '---------------------------
-    ' Process input paragraphs
-    '---------------------------
-    For Each para In inputDoc.Paragraphs
+            ' others ignored
+        End Select
+    Next n
 
-        textLine = Trim(Replace(para.Range.text, vbCr, ""))
+    ' 4) Update fields (if template has TOC/page fields etc.)
+    UpdateAllFields outDoc
 
-        If textLine <> "" Then
+    outDoc.SaveAs2 FileName:=outPath, FileFormat:=wdFormatXMLDocument
+    outDoc.Close SaveChanges:=False
 
-            ' Main heading (1.0, 2.0 ...)
-            If IsMainHeading(textLine) Then
-                cleanText = RemoveNumbering(textLine)
-                InsertStyledParagraph targetRange, cleanText, "Heading 1"
+    MsgBox "Done. Saved:" & vbCrLf & outPath, vbInformation
 
-            ' Sub heading (1.1, 2.3 ...)
-            ElseIf IsSubHeading(textLine) Then
-                cleanText = RemoveNumbering(textLine)
-                InsertStyledParagraph targetRange, cleanText, "Heading 2"
+CleanExit:
+    Application.DisplayAlerts = wdAlertsAll
+    Application.ScreenUpdating = True
+    Exit Sub
+CleanFail:
+    MsgBox "Error " & Err.Number & ": " & Err.Description, vbCritical
+    Resume CleanExit
+End Sub
 
-            ' Normal content
-            Else
-                InsertStyledParagraph targetRange, textLine, "Normal"
-            End If
+' ===================== EMIT FROM XML (STRICT) =====================
 
+Private Sub ProcessXmlTable_STRICT(ByVal doc As Word.Document, ByVal tableNode As Object)
+    ' Skip catalog tables (CONTENTS / REVISION STATUS)
+    If IsCatalogueTable(tableNode) Then Exit Sub
+
+    Dim r As Object, cells As Collection
+    For Each r In tableNode.SelectNodes("row")
+        Set cells = ReadRowCells(r)
+        If cells Is Nothing Or cells.Count = 0 Then GoTo NextRow
+
+        ' Heading row ONLY if cell-1 is a number; heading text = cells 2..n
+        Dim c1 As String: c1 = SafeCell(cells, 1)
+        Dim title As String: title = JoinFromIndex(cells, 2)
+
+        If LooksLikeNumber(c1) And Len(Trim$(title)) > 0 Then
+            Dim lvl As Long: lvl = LevelFromNumber(c1)
+            If lvl > 0 Then InsertHeadingTitleOnly doc, Trim$(title), lvl
+            GoTo NextRow
         End If
-    Next para
 
-    inputDoc.Close False
+        ' Body row: dump most relevant text as body
+        Dim bodyText As String: bodyText = LastNonEmpty(cells)
+        bodyText = Replace(bodyText, vbFormFeed, "")
+        If Len(Trim$(bodyText)) > 0 Then InsertPlainParagraph doc, Trim$(bodyText)
 
-    MsgBox "Document conversion completed successfully!", vbInformation
-
+NextRow:
+    Next r
 End Sub
 
-'==================================================
-' Inserts text using style without extra spacing
-'==================================================
-Sub InsertStyledParagraph(ByRef rng As Range, _
-                          ByVal textValue As String, _
-                          ByVal styleName As String)
+' ===================== WORD EMITTERS =====================
 
-    rng.InsertAfter textValue
-    rng.Paragraphs(1).style = styleName
+' Append a paragraph and return the newly created Paragraph safely
+Private Function TCE_AppendPara(ByVal doc As Word.Document, ByVal text As String) As Word.Paragraph
+    Dim endBefore As Long
+    endBefore = doc.content.End
 
-    With rng.Paragraphs(1).Format
-        ' Spacing control
-        .SpaceBefore = 0
-        .SpaceAfter = 6
+    Dim atEnd As Word.Range
+    Set atEnd = doc.content
+    atEnd.Collapse wdCollapseEnd
+    atEnd.InsertAfter text & vbCr
 
-        ' Pagination FIX (important)
-        .KeepWithNext = False
-        .KeepTogether = False
-        .PageBreakBefore = False
-    End With
+    Dim justAdded As Word.Range
+    Set justAdded = doc.Range(Start:=endBefore, End:=doc.content.End)
+    Set TCE_AppendPara = justAdded.Paragraphs(1)
+End Function
 
-    rng.InsertParagraphAfter
-    rng.Collapse wdCollapseEnd
+' Insert a heading with *title only* (NO number in text), and style by level
+Private Sub InsertHeadingTitleOnly(ByVal doc As Word.Document, ByVal titleText As String, ByVal level As Long)
+    Dim p As Word.Paragraph
+    Set p = TCE_AppendPara(doc, Trim$(titleText))
 
+    On Error Resume Next
+    Select Case level
+        Case 1: p.Range.style = doc.Styles(wdStyleHeading1)
+        Case 2: p.Range.style = doc.Styles(wdStyleHeading2)
+        Case Else: p.Range.style = doc.Styles(wdStyleHeading3)
+    End Select
+    ' If you want NO visible numbers even on headings, un-comment the next line:
+    ' p.Range.ListFormat.RemoveNumbers
+    On Error GoTo 0
 End Sub
 
+' Insert a body paragraph (force style, remove numbering, outline = body)
+Private Sub InsertPlainParagraph(ByVal doc As Word.Document, ByVal text As String)
+    Dim p As Word.Paragraph
+    Set p = TCE_AppendPara(doc, text)
 
-'==================================================
-' Detect main heading (1.0, 2.0 ...)
-'==================================================
-Function IsMainHeading(textLine As String) As Boolean
-    IsMainHeading = textLine Like "[0-9]*.0 *"
+    Dim bodyStyleName As String
+    bodyStyleName = TCE_BodyStyleName(doc)  ' "Body Text" if present, else Normal
+
+    On Error Resume Next
+    p.Range.style = doc.Styles(bodyStyleName)
+    p.Range.ListFormat.RemoveNumbers          ' no list continuation
+    p.OutlineLevel = wdOutlineLevelBodyText   ' no outline inheritance
+    On Error GoTo 0
+End Sub
+
+Private Sub UpdateAllFields(ByVal doc As Word.Document)
+    On Error Resume Next
+    Dim s As Word.Range
+    For Each s In doc.StoryRanges
+        s.Fields.Update
+    Next s
+    Dim t As Word.TableOfContents
+    For Each t In doc.TablesOfContents
+        t.Update
+        t.UpdatePageNumbers
+    Next t
+    On Error GoTo 0
+End Sub
+
+' ===================== ROW/CELL HELPERS =====================
+
+' Read <cell> texts for one <row> into a 1-based Collection
+Private Function ReadRowCells(ByVal rowNode As Object) As Collection
+    Dim col As New Collection, c As Object
+    For Each c In rowNode.SelectNodes("cell")
+        col.Add SanitizeText(c.text)
+    Next c
+    Set ReadRowCells = col
 End Function
 
-'==================================================
-' Detect sub heading (1.1, 2.3 ...)
-'==================================================
-Function IsSubHeading(textLine As String) As Boolean
-    IsSubHeading = textLine Like "[0-9]*.[1-9]* *"
+' Safe 1-based getter from a Collection
+Private Function SafeCell(ByVal cells As Collection, ByVal index As Long) As String
+    On Error Resume Next
+    SafeCell = CStr(cells(index))
+    If Err.Number <> 0 Then Err.Clear: SafeCell = ""
+    On Error GoTo 0
 End Function
 
-'==================================================
-' Remove numeric prefix from heading
-'==================================================
-Function RemoveNumbering(textLine As String) As String
-    Dim pos As Long
-    pos = InStr(textLine, " ")
-    If pos > 0 Then
-        RemoveNumbering = Trim(Mid(textLine, pos + 1))
-    Else
-        RemoveNumbering = textLine
+' Join cells from startIndex..end into one trimmed string, skipping empties
+Private Function JoinFromIndex(ByVal cells As Collection, ByVal startIndex As Long) As String
+    Dim i As Long, sb As String, piece As String
+    For i = startIndex To cells.Count
+        piece = Trim$(CStr(cells(i)))
+        If Len(piece) > 0 Then
+            If Len(sb) > 0 Then sb = sb & " "
+            sb = sb & piece
+        End If
+    Next i
+    JoinFromIndex = sb
+End Function
+
+' Pick the last non-empty cell (useful when content sits to the right)
+Private Function LastNonEmpty(ByVal cells As Collection) As String
+    Dim i As Long, piece As String
+    For i = cells.Count To 1 Step -1
+        piece = Trim$(CStr(cells(i)))
+        If Len(piece) > 0 Then
+            LastNonEmpty = piece
+            Exit Function
+        End If
+    Next i
+    LastNonEmpty = ""
+End Function
+
+' Clean per-cell text (remove CR/LF/FF and collapse whitespace)
+Private Function SanitizeText(ByVal s As String) As String
+    Dim t As String
+    t = Replace$(s, vbCr, "")
+    t = Replace$(t, vbLf, " ")
+    t = Replace$(t, vbFormFeed, "")
+    Dim re As Object
+    Set re = CreateObject("VBScript.RegExp")
+    re.Global = True
+    re.Pattern = "\s+"
+    SanitizeText = Trim$(re.Replace(t, " "))
+End Function
+
+' Decide if a table is a catalog (CONTENTS, REVISION STATUS) based on first row text
+Private Function IsCatalogueTable(ByVal tableNode As Object) As Boolean
+    Dim firstRow As Object, headerText As String, c As Object
+    Set firstRow = tableNode.SelectSingleNode("row")
+    If firstRow Is Nothing Then Exit Function
+
+    For Each c In firstRow.SelectNodes("cell")
+        headerText = headerText & " " & UCase$(SanitizeText(c.text))
+    Next c
+    headerText = Trim$(headerText)
+
+    If InStr(1, headerText, "CONTENTS", vbTextCompare) > 0 Then
+        IsCatalogueTable = True: Exit Function
+    End If
+    If InStr(1, headerText, "REVISION STATUS", vbTextCompare) > 0 Then
+        IsCatalogueTable = True: Exit Function
     End If
 End Function
 
-'==================================================
-' File picker (input / template)
-'==================================================
-Function GetFilePath(title As String) As String
+' ===================== NUMBER PARSING =====================
+
+' Strict number detector: 1 | 1.0 | 2.1 | 2.1.3 (etc.)
+Private Function LooksLikeNumber(ByVal s As String) As Boolean
+    Dim re As Object
+    Set re = CreateObject("VBScript.RegExp")
+    re.Pattern = "^\s*\d+(?:\.\d+)*\s*$"
+    re.IgnoreCase = True
+    LooksLikeNumber = re.Test(s)
+End Function
+
+' Map number to level (EXACT rules):
+'  - Heading 1 = X.0 only
+'  - Heading 2 = X.Y where Y>0 (exactly one dot)
+'  - Heading 3 = X.Y.Z (+ deeper; two or more dots)
+Private Function LevelFromNumber(ByVal s As String) As Long
+    Dim re As Object: Set re = CreateObject("VBScript.RegExp")
+    re.Pattern = "^\s*(\d+(?:\.\d+)*)\s*$"
+    re.IgnoreCase = True
+    If Not re.Test(s) Then Exit Function
+
+    Dim pure As String: pure = re.Execute(s)(0).SubMatches(0)
+    Dim parts() As String: parts = Split(pure, ".")
+    Dim dots As Long: dots = UBound(parts)
+
+    If dots = 1 Then
+        If val(parts(1)) = 0 Then
+            LevelFromNumber = 1    ' X.0 ? H1
+        Else
+            LevelFromNumber = 2    ' X.Y (Y>0) ? H2
+        End If
+        Exit Function
+    End If
+
+    If dots >= 2 Then
+        LevelFromNumber = 3        ' X.Y.Z+ ? H3
+        Exit Function
+    End If
+
+    ' Single integer like "1" ? not a heading (treated as body)
+    LevelFromNumber = 0
+End Function
+
+' ===================== SAFE XML LOADER =====================
+
+Private Function LoadDomFromXmlFileSafe(ByVal xmlPath As String) As Object
+    Dim raw As String
+    raw = ReadTextFileSmart(xmlPath)
+    If Len(raw) = 0 Then
+        MsgBox "Could not read XML file.", vbCritical
+        Exit Function
+    End If
+
+    Dim clean As String
+    clean = SanitizeXmlText(raw)
+
+    Dim dom As Object
+    Set dom = CreateObject("MSXML2.DOMDocument.6.0")
+    dom.async = False
+    dom.validateOnParse = False
+
+    If Not dom.LoadXML(clean) Then
+        Dim safeCopy As String
+        safeCopy = xmlPath & ".sanitized.xml"
+        WriteUtf8TextFile safeCopy, clean
+
+        MsgBox "XML parse error: " & dom.parseError.reason & _
+               vbCrLf & "Line " & dom.parseError.line & ", Pos " & dom.parseError.linepos & _
+               vbCrLf & "Sanitized copy saved: " & safeCopy, vbCritical
+        Set dom = Nothing
+    End If
+
+    Set LoadDomFromXmlFileSafe = dom
+End Function
+
+Private Function ReadTextFileSmart(ByVal path As String) As String
+    On Error Resume Next
+    ReadTextFileSmart = ReadTextWithCharset(path, "utf-8")
+    If Len(ReadTextFileSmart) = 0 Then ReadTextFileSmart = ReadTextWithCharset(path, "unicode")
+    If Len(ReadTextFileSmart) = 0 Then ReadTextFileSmart = ReadTextWithCharset(path, "windows-1252")
+    On Error GoTo 0
+End Function
+
+Private Function ReadTextWithCharset(ByVal path As String, ByVal charset As String) As String
+    Dim stm As Object: Set stm = CreateObject("ADODB.Stream")
+    With stm
+        .Type = 2
+        .charset = charset
+        .Open
+        .LoadFromFile path
+        ReadTextWithCharset = .ReadText(-1)
+        .Close
+    End With
+End Function
+
+' Sanitize XML text: remove forbidden control chars, fix raw '&', keep valid entities/numerics
+Private Function SanitizeXmlText(ByVal s As String) As String
+    Dim i As Long
+    Dim re As Object
+
+    ' Remove XML 1.0 forbidden control characters except TAB(9), LF(10), CR(13)
+    For i = 0 To 31
+        Select Case i
+            Case 9, 10, 13
+                ' keep
+            Case Else
+                s = Replace$(s, Chr$(i), " ")
+        End Select
+    Next i
+
+    ' Normalize line breaks
+    s = Replace$(s, vbCrLf, vbLf)
+    s = Replace$(s, vbCr, vbLf)
+
+    ' Escape all '&' then restore known XML entities and numeric refs
+    s = Replace$(s, "&", "&amp;")
+    s = Replace$(s, "&amp;amp;", "&amp;")   ' undo double
+    s = Replace$(s, "&amp;lt;", "&lt;")
+    s = Replace$(s, "&amp;gt;", "&gt;")
+    s = Replace$(s, "&amp;quot;", "&quot;")
+    s = Replace$(s, "&amp;apos;", "&apos;")
+
+    Set re = CreateObject("VBScript.RegExp")
+    re.Global = True
+    re.IgnoreCase = True
+
+    re.Pattern = "&amp;#([0-9]+);"
+    s = re.Replace(s, "&#$1;")
+
+    re.Pattern = "&amp;#x([0-9A-Fa-f]+);"
+    s = re.Replace(s, "&#x$1;")
+
+    SanitizeXmlText = s
+End Function
+
+Private Sub WriteUtf8TextFile(ByVal path As String, ByVal content As String)
+    Dim stm As Object: Set stm = CreateObject("ADODB.Stream")
+    With stm
+        .Type = 2
+        .charset = "utf-8"
+        .Open
+        .WriteText content
+        .SaveToFile path, 2 ' overwrite
+        .Close
+    End With
+End Sub
+
+' ===================== UI HELPERS =====================
+
+Private Function PickOneXml(ByVal title As String) As String
     With Application.FileDialog(msoFileDialogFilePicker)
         .title = title
-        .Filters.Clear
-        .Filters.Add "Word Documents", "*.docx"
         .AllowMultiSelect = False
-        If .Show = -1 Then
-            GetFilePath = .SelectedItems(1)
-        Else
-            GetFilePath = ""
-        End If
+        .Filters.Clear
+        .Filters.Add "XML", "*.xml"
+        If .Show = -1 Then PickOneXml = .SelectedItems(1)
     End With
 End Function
 
-'==================================================
-' Save As dialog for output
-'==================================================
-Function GetSavePath() As String
+Private Function PickTemplateDocOrDotx(ByVal title As String) As String
+    With Application.FileDialog(msoFileDialogFilePicker)
+        .title = title
+        .AllowMultiSelect = False
+        .Filters.Clear
+        .Filters.Add "Word / Template", "*.docx;*.dotx"
+        If .Show = -1 Then PickTemplateDocOrDotx = .SelectedItems(1)
+    End With
+End Function
+
+Private Function PickSaveDocx(ByVal title As String) As String
     With Application.FileDialog(msoFileDialogSaveAs)
-        .title = "Save OUTPUT file as"
-        .InitialFileName = "Converted_Document.docx"
+        .title = title
+        .InitialFileName = "converted_from_xml.docx"
         If .Show = -1 Then
-            GetSavePath = .SelectedItems(1)
-        Else
-            GetSavePath = ""
+            Dim sel As String: sel = .SelectedItems(1)
+            If LCase$(Right$(sel, 5)) <> ".docx" Then sel = sel & ".docx"
+            PickSaveDocx = sel
         End If
     End With
 End Function
 
+' Determine a body style name that exists in the document
+Private Function TCE_BodyStyleName(ByVal doc As Word.Document) As String
+    If TCE_StyleExists(doc, "Body Text") Then
+        TCE_BodyStyleName = "Body Text"
+    Else
+        TCE_BodyStyleName = doc.Styles(wdStyleNormal).NameLocal  ' fallback
+    End If
+End Function
 
-
-
-
-
-
-
-
-
-
-
+' Check if a style exists by name (case-insensitive)
+Private Function TCE_StyleExists(ByVal doc As Word.Document, ByVal styleName As String) As Boolean
+    Dim sty As Variant
+    On Error Resume Next
+    Set sty = doc.Styles(styleName)
+    TCE_StyleExists = (Err.Number = 0)
+    Err.Clear
+    On Error GoTo 0
+End Function
 
 
 
