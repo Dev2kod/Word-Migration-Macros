@@ -1,10 +1,15 @@
 Option Explicit
 
-' ============================================================================ 
-' TEMPLATE PLACEHOLDER FILLING MACRO - TITLE ONLY
 ' ============================================================================
-' Description: Extracts ONLY TITLE from CENTER of header
-'              Fills template placeholders, creates new output file
+' TEMPLATE PLACEHOLDER FILLING MACRO - COMPLETE VERSION
+' ============================================================================
+' Description:
+'   - Extracts TITLE from CENTER-aligned text in header
+'   - Extracts DOC_Number from LEFT-aligned text in header
+'   - Fills {{TITLE}} and {{DOC_Number}} placeholders in template
+'   - Creates new output file (template remains unchanged)
+'   - User selects output folder and filename
+'   - All remaining placeholders filled as blank
 ' ============================================================================
 
 Sub FillTemplate_SimplifiedVersion()
@@ -19,6 +24,7 @@ Sub FillTemplate_SimplifiedVersion()
     Dim outputDoc As Document
     
     Dim title As String
+    Dim docNumber As String
     
     Dim fso As Object
     Set fso = CreateObject("Scripting.FileSystemObject")
@@ -87,8 +93,6 @@ Sub FillTemplate_SimplifiedVersion()
     ' ========================================
     ' STEP 5: Extract Title and Doc Number from Source
     ' ========================================
-    Dim docNumber As String
-    
     Set srcDoc = Documents.Open(srcPath, ReadOnly:=True, Visible:=False)
     
     ' Extract title from center of header
@@ -110,19 +114,48 @@ Sub FillTemplate_SimplifiedVersion()
     ' ========================================
     Set outputDoc = Documents.Open(outputPath, Visible:=False)
     
-    ' Replace TITLE
-    Call ReplaceAllInstances(outputDoc, "{{TITLE}}", title)
+    ' STEP 7A: Fill the placeholders we have data for
+    ' Replace TITLE (only if we found one)
+    If Len(Trim(title)) > 0 Then
+        Call ReplaceAllInstances(outputDoc, "{{TITLE}}", title)
+    End If
     
-    ' Replace DOC_Number
-    Call ReplaceAllInstances(outputDoc, "{{DOC_Number}}", docNumber)
+    ' Replace DOC_Number (only if we found one)
+    If Len(Trim(docNumber)) > 0 Then
+        Call ReplaceAllInstances(outputDoc, "{{DOC_Number}}", docNumber)
+    End If
     
-    ' Clear all remaining placeholders
-    Call ClearAllPlaceholders(outputDoc)
+    ' STEP 7B: Now clear ONLY the remaining {{placeholder}} patterns
+    ' (ones that are still in {{...}} format because we didn't fill them)
+    Call ClearRemainingPlaceholders(outputDoc)
     
-    ' Save and close
-    outputDoc.Save
+    ' ========================================
+    ' STEP 7.5: Save the document explicitly
+    ' ========================================
+    On Error Resume Next
+    
+    ' Save the document
+    outputDoc.SaveAs2 outputPath, wdFormatXMLDocument
+    
+    If Err.Number <> 0 Then
+        MsgBox "Error saving file: " & Err.Description & vbCrLf & vbCrLf & _
+               "Path: " & outputPath, vbExclamation
+        outputDoc.Close SaveChanges:=False
+        Set outputDoc = Nothing
+        Exit Sub
+    End If
+    
+    On Error GoTo 0
+    
+    ' Close without saving again (already saved)
     outputDoc.Close SaveChanges:=False
     Set outputDoc = Nothing
+    
+    ' Verify file exists
+    If Not fso.FileExists(outputPath) Then
+        MsgBox "Warning: File may not have been saved properly!" & vbCrLf & outputPath, vbExclamation
+        Exit Sub
+    End If
     
     ' ========================================
     ' STEP 8: Success Message
@@ -281,7 +314,7 @@ End Function
 
 
 ' ============================================================================
-' CLEAN DOCUMENT NUMBER (REMOVE LABELS LIKE "Doc No:", "File No:", ETC)
+' CLEAN DOCUMENT NUMBER (REMOVE LABELS LIKE "Doc No:", "Spec. No:", ETC)
 ' ============================================================================
 Private Function CleanDocNumber(text As String) As String
     
@@ -693,52 +726,131 @@ End Sub
 
 
 ' ============================================================================
-' CLEAR ALL REMAINING PLACEHOLDERS
+' CLEAR ONLY REMAINING PLACEHOLDERS (ONES STILL IN {{...}} FORMAT)
 ' ============================================================================
-Private Sub ClearAllPlaceholders(doc As Document)
+Private Sub ClearRemainingPlaceholders(doc As Document)
     
-    Dim allText As String
     Dim placeholders As Collection
     Dim placeholder As Variant
-    Dim i As Integer
-    Dim startPos As Integer
-    Dim endPos As Integer
-    Dim token As String
     
-    Set placeholders = New Collection
+    ' Find all placeholders that are STILL in {{...}} format
+    ' (these are the ones we didn't fill)
+    Set placeholders = CollectAllPlaceholders(doc)
     
-    ' Collect all text from document
-    allText = doc.content.text
-    
-    ' Find all placeholders in format {{...}}
-    i = 1
-    Do While i < Len(allText)
-        
-        startPos = InStr(i, allText, "{{")
-        If startPos = 0 Then Exit Do
-        
-        endPos = InStr(startPos + 2, allText, "}}")
-        If endPos = 0 Then Exit Do
-        
-        ' Extract token
-        token = Mid(allText, startPos + 2, endPos - startPos - 2)
-        token = Trim(token)
-        
-        ' Add to collection if not already there
-        If Len(token) > 0 Then
-            On Error Resume Next
-            placeholders.Add token, token  ' Key prevents duplicates
-            On Error GoTo 0
-        End If
-        
-        i = endPos + 2
-    Loop
-    
-    ' Replace each placeholder with blank
+    ' Replace each remaining placeholder with empty string ""
     For Each placeholder In placeholders
         Call ReplaceAllInstances(doc, "{{" & placeholder & "}}", "")
     Next placeholder
     
 End Sub
+
+
+' ============================================================================
+' COLLECT ALL PLACEHOLDERS FROM ENTIRE DOCUMENT
+' ============================================================================
+Private Function CollectAllPlaceholders(doc As Document) As Collection
+    
+    Dim placeholders As Collection
+    Dim seen As Object
+    Dim sec As section
+    Dim shp As Shape
+    
+    Set placeholders = New Collection
+    Set seen = CreateObject("Scripting.Dictionary")
+    
+    ' Collect from main document body
+    Call ExtractPlaceholdersFromText(doc.content.text, placeholders, seen)
+    
+    ' Collect from all sections - headers and footers
+    For Each sec In doc.Sections
+        
+        ' Headers
+        On Error Resume Next
+        Call ExtractPlaceholdersFromText(sec.Headers(wdHeaderFooterPrimary).Range.text, placeholders, seen)
+        Call ExtractPlaceholdersFromText(sec.Headers(wdHeaderFooterFirstPage).Range.text, placeholders, seen)
+        Call ExtractPlaceholdersFromText(sec.Headers(wdHeaderFooterEvenPages).Range.text, placeholders, seen)
+        On Error GoTo 0
+        
+        ' Footers
+        On Error Resume Next
+        Call ExtractPlaceholdersFromText(sec.Footers(wdHeaderFooterPrimary).Range.text, placeholders, seen)
+        Call ExtractPlaceholdersFromText(sec.Footers(wdHeaderFooterFirstPage).Range.text, placeholders, seen)
+        Call ExtractPlaceholdersFromText(sec.Footers(wdHeaderFooterEvenPages).Range.text, placeholders, seen)
+        On Error GoTo 0
+        
+    Next sec
+    
+    ' Collect from shapes in main document
+    For Each shp In doc.shapes
+        On Error Resume Next
+        If shp.TextFrame.HasText Then
+            Call ExtractPlaceholdersFromText(shp.TextFrame.TextRange.text, placeholders, seen)
+        End If
+        On Error GoTo 0
+    Next shp
+    
+    ' Collect from shapes in headers/footers
+    For Each sec In doc.Sections
+        
+        On Error Resume Next
+        For Each shp In sec.Headers(wdHeaderFooterPrimary).shapes
+            If shp.TextFrame.HasText Then
+                Call ExtractPlaceholdersFromText(shp.TextFrame.TextRange.text, placeholders, seen)
+            End If
+        Next shp
+        
+        For Each shp In sec.Footers(wdHeaderFooterPrimary).shapes
+            If shp.TextFrame.HasText Then
+                Call ExtractPlaceholdersFromText(shp.TextFrame.TextRange.text, placeholders, seen)
+            End If
+        Next shp
+        On Error GoTo 0
+        
+    Next sec
+    
+    Set CollectAllPlaceholders = placeholders
+    
+End Function
+
+
+' ============================================================================
+' EXTRACT PLACEHOLDER NAMES FROM TEXT
+' ============================================================================
+Private Sub ExtractPlaceholdersFromText(text As String, placeholders As Collection, seen As Object)
+    
+    Dim i As Integer
+    Dim startPos As Integer
+    Dim endPos As Integer
+    Dim token As String
+    
+    If Len(text) = 0 Then Exit Sub
+    
+    ' Find all {{...}} patterns
+    i = 1
+    Do While i <= Len(text)
+        
+        startPos = InStr(i, text, "{{")
+        If startPos = 0 Then Exit Do
+        
+        endPos = InStr(startPos + 2, text, "}}")
+        If endPos = 0 Then Exit Do
+        
+        ' Extract the placeholder name (between {{ and }})
+        token = Mid(text, startPos + 2, endPos - startPos - 2)
+        token = Trim(token)
+        
+        ' Add to collection if not already seen
+        If Len(token) > 0 Then
+            If Not seen.Exists(token) Then
+                seen(token) = True
+                placeholders.Add token
+            End If
+        End If
+        
+        i = endPos + 2
+    Loop
+    
+End Sub
+
 
 
