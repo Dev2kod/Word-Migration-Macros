@@ -137,9 +137,9 @@ Private Sub InsertHeadingTitleOnly(ByVal doc As Word.Document, ByVal titleText A
 
     On Error Resume Next
     Select Case level
-        Case 1: p.Range.style = doc.Styles(wdStyleHeading1)
-        Case 2: p.Range.style = doc.Styles(wdStyleHeading2)
-        Case Else: p.Range.style = doc.Styles(wdStyleHeading3)
+        Case 1: p.Range.Style = doc.Styles(wdStyleHeading1)
+        Case 2: p.Range.Style = doc.Styles(wdStyleHeading2)
+        Case Else: p.Range.Style = doc.Styles(wdStyleHeading3)
     End Select
     ' If you want NO visible numbers even on headings, un-comment the next line:
     ' p.Range.ListFormat.RemoveNumbers
@@ -155,7 +155,7 @@ Private Sub InsertPlainParagraph(ByVal doc As Word.Document, ByVal text As Strin
     bodyStyleName = TCE_BodyStyleName(doc)  ' "Body Text" if present, else Normal
 
     On Error Resume Next
-    p.Range.style = doc.Styles(bodyStyleName)
+    p.Range.Style = doc.Styles(bodyStyleName)
     p.Range.ListFormat.RemoveNumbers          ' no list continuation
     p.OutlineLevel = wdOutlineLevelBodyText   ' no outline inheritance
     On Error GoTo 0
@@ -278,7 +278,7 @@ Private Function LevelFromNumber(ByVal s As String) As Long
     Dim dots As Long: dots = UBound(parts)
 
     If dots = 1 Then
-        If val(parts(1)) = 0 Then
+        If Val(parts(1)) = 0 Then
             LevelFromNumber = 1    ' X.0 ? H1
         Else
             LevelFromNumber = 2    ' X.Y (Y>0) ? H2
@@ -319,7 +319,7 @@ Private Function LoadDomFromXmlFileSafe(ByVal xmlPath As String) As Object
         WriteUtf8TextFile safeCopy, clean
 
         MsgBox "XML parse error: " & dom.parseError.reason & _
-               vbCrLf & "Line " & dom.parseError.line & ", Pos " & dom.parseError.linepos & _
+               vbCrLf & "Line " & dom.parseError.Line & ", Pos " & dom.parseError.linepos & _
                vbCrLf & "Sanitized copy saved: " & safeCopy, vbCritical
         Set dom = Nothing
     End If
@@ -451,7 +451,5 @@ Private Function TCE_StyleExists(ByVal doc As Word.Document, ByVal styleName As 
     Err.Clear
     On Error GoTo 0
 End Function
-
-
 
 
