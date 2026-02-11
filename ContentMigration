@@ -1,0 +1,437 @@
+Option Explicit
+
+' =================== ENTRY POINT ===================
+Public Sub ConvertDocxUsingTemplate_STRICT()
+    Dim inPath As String, tplPath As String, outPath As String, tmpXml As String
+    
+    ' Ask user for input, template, and output
+    inPath = PickOneDocx("Select INPUT Word file")
+    If Len(inPath) = 0 Then Exit Sub
+    
+    tplPath = PickTemplateDocOrDotx("Select TEMPLATE (.docx/.dotx)")
+    If Len(tplPath) = 0 Then Exit Sub
+    
+    outPath = PickSaveDocx("Save OUTPUT file")
+    If Len(outPath) = 0 Then Exit Sub
+    
+    ' Temporary XML file path
+    tmpXml = Environ$("TEMP") & "\temp_conversion.xml"
+    
+    Application.ScreenUpdating = False
+    Application.DisplayAlerts = wdAlertsNone
+    On Error GoTo CleanFail
+    
+    ' Step 1: Open input DOCX
+    Dim src As Document
+    Set src = Documents.Open(FileName:=inPath, ReadOnly:=True, AddToRecentFiles:=False)
+    
+    ' Step 2: Extract XML from page 2 onward
+    Dim bodyRng As Range
+    Set bodyRng = RangeFromPageToEnd(src, 2)
+    Dim xml As String
+    xml = BuildXmlFromRange_Safe(src, bodyRng)
+    
+    src.Close False
+    
+    ' Write XML to temp file
+    WriteUtf8TextFile tmpXml, xml
+    
+    ' Step 3: Load XML into DOM
+    Dim dom As Object
+    Set dom = LoadDomFromXmlFileSafe(tmpXml)
+    If dom Is Nothing Then GoTo CleanExit
+    
+    Dim body As Object
+    Set body = dom.SelectSingleNode("/document/body")
+    
+    ' Step 4: Create new doc from template
+    Dim outDoc As Document, atEnd As Range
+    Set outDoc = Documents.Add(Template:=tplPath, NewTemplate:=False)
+    Set atEnd = outDoc.content
+    atEnd.Collapse wdCollapseEnd
+    atEnd.InsertBreak wdPageBreak   ' preserve template page 1
+    atEnd.Collapse wdCollapseEnd
+    
+    ' Step 5: Emit XML into template
+    Dim n As Object
+    For Each n In body.ChildNodes
+        Select Case LCase(n.nodeName)
+            Case "p"
+                InsertPlainParagraph outDoc, n.text
+            Case "table"
+                ProcessXmlTable_STRICT outDoc, n
+        End Select
+    Next n
+    
+    ' Step 6: Update fields and save
+    UpdateAllFields outDoc
+    outDoc.SaveAs2 FileName:=outPath, FileFormat:=wdFormatXMLDocument
+    outDoc.Close False
+    
+    ' Step 7: Delete temp XML
+    On Error Resume Next
+    Kill tmpXml
+    On Error GoTo 0
+    
+    MsgBox "Conversion complete: " & vbCrLf & outPath, vbInformation
+    
+CleanExit:
+    Application.DisplayAlerts = wdAlertsAll
+    Application.ScreenUpdating = True
+    Exit Sub
+    
+CleanFail:
+    MsgBox "Error " & Err.Number & ": " & Err.Description, vbCritical
+    Resume CleanExit
+End Sub
+
+' ===================== UI HELPERS =====================
+Private Function PickOneDocx(ByVal title As String) As String
+    With Application.FileDialog(msoFileDialogFilePicker)
+        .title = title
+        .AllowMultiSelect = False
+        .Filters.Clear
+        .Filters.Add "Word document", "*.docx"
+        If .Show = -1 Then PickOneDocx = .SelectedItems(1)
+    End With
+End Function
+
+Private Function PickTemplateDocOrDotx(ByVal title As String) As String
+    With Application.FileDialog(msoFileDialogFilePicker)
+        .title = title
+        .AllowMultiSelect = False
+        .Filters.Clear
+        .Filters.Add "Word / Template", "*.docx;*.dotx"
+        If .Show = -1 Then PickTemplateDocOrDotx = .SelectedItems(1)
+    End With
+End Function
+
+Private Function PickSaveDocx(ByVal title As String) As String
+    With Application.FileDialog(msoFileDialogSaveAs)
+        .title = title
+        .InitialFileName = "converted_from_xml.docx"
+        If .Show = -1 Then
+            Dim sel As String: sel = .SelectedItems(1)
+            If LCase$(Right$(sel, 5)) <> ".docx" Then sel = sel & ".docx"
+            PickSaveDocx = sel
+        End If
+    End With
+End Function
+
+' ===================== RANGE HELPER =====================
+Private Function RangeFromPageToEnd(ByVal doc As Document, ByVal pageNum As Long) As Range
+    Dim r As Range
+    On Error Resume Next
+    Set r = doc.GoTo(What:=wdGoToPage, Which:=wdGoToAbsolute, Count:=pageNum)
+    On Error GoTo 0
+    If r Is Nothing Then Exit Function
+    Dim res As Range
+    Set res = doc.Range(Start:=r.Start, End:=doc.content.End)
+    Set RangeFromPageToEnd = res
+End Function
+
+' ===================== XML BUILDER =====================
+Private Function BuildXmlFromRange_Safe(ByVal src As Document, ByVal r As Range) As String
+    Dim sb As New VBA.Collection
+    sb.Add "<?xml version=""1.0"" encoding=""UTF-8""?>" & vbLf
+    sb.Add "<document>" & vbLf
+    sb.Add "  <body startPage=""2"">" & vbLf
+    
+    Dim p As Paragraph
+    For Each p In r.Paragraphs
+        Dim txt As String: txt = Trim$(Replace(p.Range.text, vbCr, ""))
+        If Len(txt) > 0 Then sb.Add "    <p>" & X(txt) & "</p>" & vbLf
+    Next p
+    
+    Dim t As Table
+    For Each t In r.Tables
+        sb.Add TableToXml_Safe(t)
+    Next t
+    
+    sb.Add "  </body>" & vbLf
+    sb.Add "</document>" & vbLf
+    
+    BuildXmlFromRange_Safe = JoinCollection(sb)
+End Function
+
+' ===================== XML PROCESSOR =====================
+Private Sub ProcessXmlTable_STRICT(ByVal doc As Word.Document, ByVal tableNode As Object)
+    Dim r As Object, cells As Collection
+    For Each r In tableNode.SelectNodes("row")
+        Set cells = ReadRowCells(r)
+        If cells Is Nothing Or cells.Count = 0 Then GoTo NextRow
+        
+        Dim c1 As String: c1 = SafeCell(cells, 1)
+        Dim title As String: title = JoinFromIndex(cells, 2)
+        
+        If LooksLikeNumber(c1) And Len(Trim$(title)) > 0 Then
+            Dim lvl As Long: lvl = LevelFromNumber(c1)
+            If lvl > 0 Then
+                InsertHeadingTitleOnly doc, Trim$(title), lvl
+            End If
+            GoTo NextRow
+        End If
+        
+        ' Body row: dump most relevant text as body
+        Dim bodyText As String: bodyText = LastNonEmpty(cells)
+        bodyText = Replace(bodyText, vbFormFeed, "")
+        If Len(Trim$(bodyText)) > 0 Then InsertPlainParagraph doc, Trim$(bodyText)
+        
+NextRow:
+    Next r
+End Sub
+' Append a paragraph safely
+Private Function TCE_AppendPara(ByVal doc As Word.Document, ByVal text As String) As Word.Paragraph
+    Dim endBefore As Long
+    endBefore = doc.content.End
+    
+    Dim atEnd As Word.Range
+    Set atEnd = doc.content
+    atEnd.Collapse wdCollapseEnd
+    atEnd.InsertAfter text & vbCr
+    
+    Dim justAdded As Word.Range
+    Set justAdded = doc.Range(Start:=endBefore, End:=doc.content.End)
+    Set TCE_AppendPara = justAdded.Paragraphs(1)
+End Function
+
+' Insert heading with style by level
+Private Sub InsertHeadingTitleOnly(ByVal doc As Word.Document, ByVal titleText As String, ByVal level As Long)
+    Dim p As Word.Paragraph
+    Set p = TCE_AppendPara(doc, Trim$(titleText))
+    On Error Resume Next
+    Select Case level
+        Case 1: p.Range.style = doc.Styles(wdStyleHeading1)
+        Case 2: p.Range.style = doc.Styles(wdStyleHeading2)
+        Case Else: p.Range.style = doc.Styles(wdStyleHeading3)
+    End Select
+    p.Range.ListFormat.RemoveNumbers
+    On Error GoTo 0
+End Sub
+
+' Insert body paragraph
+Private Sub InsertPlainParagraph(ByVal doc As Word.Document, ByVal text As String)
+    Dim p As Word.Paragraph
+    Set p = TCE_AppendPara(doc, text)
+    Dim bodyStyleName As String
+    bodyStyleName = TCE_BodyStyleName(doc)
+    On Error Resume Next
+    p.Range.style = doc.Styles(bodyStyleName)
+    p.Range.ListFormat.RemoveNumbers
+    p.OutlineLevel = wdOutlineLevelBodyText
+    On Error GoTo 0
+End Sub
+
+Private Sub UpdateAllFields(ByVal doc As Word.Document)
+    On Error Resume Next
+    Dim s As Word.Range
+    For Each s In doc.StoryRanges
+        s.Fields.Update
+    Next s
+    Dim t As Word.TableOfContents
+    For Each t In doc.TablesOfContents
+        t.Update
+        t.UpdatePageNumbers
+    Next t
+    On Error GoTo 0
+End Sub
+Private Function ReadRowCells(ByVal rowNode As Object) As Collection
+    Dim col As New Collection, c As Object
+    For Each c In rowNode.SelectNodes("cell")
+        col.Add SanitizeText(c.text)
+    Next c
+    Set ReadRowCells = col
+End Function
+
+Private Function SafeCell(ByVal cells As Collection, ByVal index As Long) As String
+    On Error Resume Next
+    SafeCell = CStr(cells(index))
+    If Err.Number <> 0 Then Err.Clear: SafeCell = ""
+    On Error GoTo 0
+End Function
+
+Private Function JoinFromIndex(ByVal cells As Collection, ByVal startIndex As Long) As String
+    Dim i As Long, sb As String, piece As String
+    For i = startIndex To cells.Count
+        piece = Trim$(CStr(cells(i)))
+        If Len(piece) > 0 Then
+            If Len(sb) > 0 Then sb = sb & " "
+            sb = sb & piece
+        End If
+    Next i
+    JoinFromIndex = sb
+End Function
+
+Private Function LastNonEmpty(ByVal cells As Collection) As String
+    Dim i As Long, piece As String
+    For i = cells.Count To 1 Step -1
+        piece = Trim$(CStr(cells(i)))
+        If Len(piece) > 0 Then
+            LastNonEmpty = piece
+            Exit Function
+        End If
+    Next i
+    LastNonEmpty = ""
+End Function
+
+Private Function SanitizeText(ByVal s As String) As String
+    Dim t As String
+    t = Replace$(s, vbCr, "")
+    t = Replace$(t, vbLf, " ")
+    t = Replace$(t, vbFormFeed, "")
+    Dim re As Object
+    Set re = CreateObject("VBScript.RegExp")
+    re.Global = True
+    re.Pattern = "\s+"
+    SanitizeText = Trim$(re.Replace(t, " "))
+End Function
+Private Function LooksLikeNumber(ByVal s As String) As Boolean
+    Dim re As Object
+    Set re = CreateObject("VBScript.RegExp")
+    re.Pattern = "^\s*\d+(?:\.\d+)*\s*$"
+    re.IgnoreCase = True
+    LooksLikeNumber = re.Test(s)
+End Function
+
+Private Function LevelFromNumber(ByVal s As String) As Long
+    Dim re As Object: Set re = CreateObject("VBScript.RegExp")
+    re.Pattern = "^\s*(\d+(?:\.\d+)*)\s*$"
+    re.IgnoreCase = True
+    If Not re.Test(s) Then Exit Function
+    
+    Dim pure As String: pure = re.Execute(s)(0).SubMatches(0)
+    Dim parts() As String: parts = Split(pure, ".")
+    Dim dots As Long: dots = UBound(parts)
+    
+    If dots = 1 Then
+        If val(parts(1)) = 0 Then
+            LevelFromNumber = 1
+        Else
+            LevelFromNumber = 2
+        End If
+        Exit Function
+    End If
+    
+    If dots >= 2 Then
+        LevelFromNumber = 3
+        Exit Function
+    End If
+    
+    LevelFromNumber = 0
+End Function
+Private Function LoadDomFromXmlFileSafe(ByVal xmlPath As String) As Object
+    Dim raw As String
+    raw = ReadTextFileSmart(xmlPath)
+    If Len(raw) = 0 Then Exit Function
+    
+    Dim dom As Object
+    Set dom = CreateObject("MSXML2.DOMDocument.6.0")
+    dom.async = False
+    dom.validateOnParse = False
+    If Not dom.LoadXML(raw) Then Set dom = Nothing
+    
+    Set LoadDomFromXmlFileSafe = dom
+End Function
+
+Private Function ReadTextFileSmart(ByVal path As String) As String
+    On Error Resume Next
+    ReadTextFileSmart = ReadTextWithCharset(path, "utf-8")
+    If Len(ReadTextFileSmart) = 0 Then ReadTextFileSmart = ReadTextWithCharset(path, "unicode")
+    If Len(ReadTextFileSmart) = 0 Then ReadTextFileSmart = ReadTextWithCharset(path, "windows-1252")
+    On Error GoTo 0
+End Function
+
+Private Function ReadTextWithCharset(ByVal path As String, ByVal charset As String) As String
+    Dim stm As Object: Set stm = CreateObject("ADODB.Stream")
+    With stm
+        .Type = 2
+        .charset = charset
+        .Open
+        .LoadFromFile path
+        ReadTextWithCharset = .ReadText(-1)
+        .Close
+    End With
+End Function
+
+Private Sub WriteUtf8TextFile(ByVal path As String, ByVal content As String)
+    Dim stm As Object: Set stm = CreateObject("ADODB.Stream")
+    With stm
+        .Type = 2
+        .charset = "utf-8"
+        .Open
+        .WriteText content
+        .SaveToFile path, 2
+        .Close
+    End With
+End Sub
+
+Private Function JoinCollection(ByVal c As VBA.Collection) As String
+    Dim i As Long, s As String
+    For i = 1 To c.Count
+        s = s & CStr(c(i))
+    Next i
+    JoinCollection = s
+End Function
+
+Private Function X(ByVal s As String) As String
+    ' Basic XML escape
+    s = Replace(s, "&", "&amp;")
+    s = Replace(s, "<", "&lt;")
+    s = Replace(s, ">", "&gt;")
+    s = Replace(s, """", "&quot;")
+    s = Replace(s, "'", "&apos;")
+    X = s
+End Function
+Private Function TCE_BodyStyleName(ByVal doc As Word.Document) As String
+    If TCE_StyleExists(doc, "Body Text") Then
+        TCE_BodyStyleName = "Body Text"
+    Else
+        TCE_BodyStyleName = doc.Styles(wdStyleNormal).NameLocal
+    End If
+End Function
+
+Private Function TCE_StyleExists(ByVal doc As Word.Document, ByVal styleName As String) As Boolean
+    Dim sty As Variant
+    On Error Resume Next
+    Set sty = doc.Styles(styleName)
+    TCE_StyleExists = (Err.Number = 0)
+    Err.Clear
+    On Error GoTo 0
+End Function
+Private Function TableToXml_Safe(ByVal tb As Table) As String
+    Dim sb As New VBA.Collection
+    sb.Add "    <table>" & vbLf
+    Dim r As Long, c As Long, maxC As Long
+    
+    For r = 1 To tb.rows.Count
+        sb.Add "      <row>" & vbLf
+        maxC = tb.rows(r).cells.Count
+        For c = 1 To maxC
+            Dim cellText As String
+            On Error Resume Next
+            cellText = tb.rows(r).cells(c).Range.text
+            If Err.Number <> 0 Then
+                Err.Clear
+                cellText = ""
+            End If
+            On Error GoTo 0
+            sb.Add "        <cell>" & X(StripParaMark(CleanCell(cellText))) & "</cell>" & vbLf
+        Next c
+        sb.Add "      </row>" & vbLf
+    Next r
+    sb.Add "    </table>" & vbLf
+    TableToXml_Safe = JoinCollection(sb)
+End Function
+
+Private Function StripParaMark(ByVal s As String) As String
+    StripParaMark = Replace(s, vbCr, "")
+End Function
+
+Private Function CleanCell(ByVal s As String) As String
+    Dim t As String
+    t = Replace(s, Chr$(13), "") ' CR
+    t = Replace(t, Chr$(7), "")  ' end-of-cell marker
+    CleanCell = t
+End Function
+
+
