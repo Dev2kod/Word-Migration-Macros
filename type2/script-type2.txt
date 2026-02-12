@@ -1,214 +1,144 @@
 Option Explicit
 
-' =================== ENTRY POINT ===================
-Sub BuildDoc_FromInput_UsingTemplate_XDot0Headings()
-    Dim srcPath As String, tplPath As String, outPath As String
-    
-    srcPath = PickOneDocx("Select INPUT Word document")
-    If Len(srcPath) = 0 Then Exit Sub
-    
-    tplPath = PickTemplateDocOrDotx("Select TEMPLATE document")
-    If Len(tplPath) = 0 Then Exit Sub
-    
-    outPath = PickSaveDocx("Save output as")
-    If Len(outPath) = 0 Then Exit Sub
-    
-    InsertContentIntoTemplate_XDot0 srcPath, tplPath, outPath
-    MsgBox "Document created successfully!" & vbCrLf & outPath, vbInformation
-End Sub
+Sub MigrateUsingStructure()
 
-' =================== MAIN LOGIC ===================
-Private Sub InsertContentIntoTemplate_XDot0(ByVal srcPath As String, ByVal tplPath As String, ByVal outPath As String)
-    Dim srcDoc As Document, tplDoc As Document, p As Paragraph
+    Dim srcPath As String
+    Dim templatePath As String
+    Dim savePath As String
+    
+    Dim srcDoc As Document
+    Dim outDoc As Document
+    Dim srcPara As Paragraph
+    Dim appendRange As Range
+    
+    Dim level As Integer
+    Dim txt As String
+    
+    ' ==========================
+    ' PICK SOURCE
+    ' ==========================
+    With Application.FileDialog(msoFileDialogFilePicker)
+        .title = "Select Source Document"
+        .Filters.Clear
+        .Filters.Add "Word Documents", "*.docx"
+        If .Show <> -1 Then Exit Sub
+        srcPath = .SelectedItems(1)
+    End With
+    
+    ' ==========================
+    ' PICK TEMPLATE
+    ' ==========================
+    With Application.FileDialog(msoFileDialogFilePicker)
+        .title = "Select Template Document"
+        .Filters.Clear
+        .Filters.Add "Word Template", "*.dotx; *.docx"
+        If .Show <> -1 Then Exit Sub
+        templatePath = .SelectedItems(1)
+    End With
+    
+    ' ==========================
+    ' SAVE LOCATION
+    ' ==========================
+    With Application.FileDialog(msoFileDialogSaveAs)
+        .title = "Save Output File"
+        .InitialFileName = "Migrated_Output.docx"
+        If .Show <> -1 Then Exit Sub
+        savePath = .SelectedItems(1)
+    End With
     
     Application.ScreenUpdating = False
-    Application.DisplayAlerts = wdAlertsNone
     
-    Set srcDoc = Documents.Open(srcPath, ReadOnly:=True, Visible:=False)
+    Set srcDoc = Documents.Open(srcPath, ReadOnly:=True)
+    Set outDoc = Documents.Add(Template:=templatePath)
     
-    ' Handle both .docx and .dotx templates safely
-    If LCase(Right$(tplPath, 5)) = ".dotx" Or LCase(Right$(tplPath, 5)) = ".dotm" Then
-        Set tplDoc = Documents.Add(Template:=tplPath, NewTemplate:=False)
-    Else
-        Set tplDoc = Documents.Open(FileName:=tplPath, ReadOnly:=False, AddToRecentFiles:=False)
-    End If
+    ' ==========================================
+    ' VERY IMPORTANT:
+    ' Collapse range AFTER template content
+    ' ==========================================
+    Set appendRange = outDoc.Range
+appendRange.Collapse wdCollapseEnd
+
+' Force new page using section break
+appendRange.InsertBreak Type:=wdSectionBreakNextPage
+appendRange.Collapse wdCollapseEnd
+
     
-    ' Preserve template page-1, then insert break
-    Dim atEnd As Range
-    Set atEnd = tplDoc.content
-    atEnd.Collapse wdCollapseEnd
-    atEnd.InsertBreak wdPageBreak
-    atEnd.Collapse wdCollapseEnd
-    
-    ' Restrict to BODY story only
-    Dim bodyRange As Range
-    Set bodyRange = srcDoc.StoryRanges(wdMainTextStory)
-    
-    ' Iterate only through body paragraphs
-    For Each p In bodyRange.Paragraphs
-        Dim txt As String: txt = Trim(Replace(p.Range.text, vbCr, ""))
-        If Len(txt) = 0 Then GoTo NextP
+    ' ==========================================
+    ' STRUCTURAL MIGRATION
+    ' ==========================================
+    For Each srcPara In srcDoc.Paragraphs
         
-        Dim lvl As Long: lvl = HeadingLevelFromNumber(txt)
-        If lvl > 0 Then
-            ' Force Heading 1 for X.0
-            If lvl = 1 Then
-                AppendStyledPara tplDoc, txt, wdStyleHeading1, wdOutlineLevel1
-            ElseIf lvl = 2 Then
-                AppendStyledPara tplDoc, txt, wdStyleHeading2, wdOutlineLevel2
-            ElseIf lvl = 3 Then
-                AppendStyledPara tplDoc, txt, wdStyleHeading3, wdOutlineLevel3
+        txt = CleanText(srcPara.Range.text)
+        
+        If txt <> "" Then
+            
+            level = DetectHeadingLevel(txt)
+            
+            appendRange.InsertAfter txt & vbCr
+            appendRange.Collapse wdCollapseEnd
+            
+            If level > 0 Then
+                appendRange.Previous(wdParagraph, 1).style = _
+                    outDoc.Styles("Heading " & level)
             Else
-                AppendStyledPara tplDoc, txt, wdStyleHeading9, wdOutlineLevelBodyText
+                appendRange.Previous(wdParagraph, 1).style = _
+                    outDoc.Styles("Normal")
             End If
-        Else
-            AppendStyledPara tplDoc, txt, "Body Text", wdOutlineLevelBodyText
+            
         End If
-NextP:
-    Next p
+        
+    Next srcPara
     
-    tplDoc.SaveAs2 outPath, wdFormatXMLDocument
-    tplDoc.Close SaveChanges:=False
-    srcDoc.Close SaveChanges:=False
+    outDoc.SaveAs2 savePath
+    srcDoc.Close False
     
-    Application.DisplayAlerts = wdAlertsAll
     Application.ScreenUpdating = True
-End Sub
+    
+    MsgBox "Migration Complete.", vbInformation
 
-Private Sub AppendStyledPara(ByVal doc As Document, ByVal txt As String, ByVal styleName As Variant, ByVal outlineLvl As WdOutlineLevel)
-    Dim atEnd As Range
-    Set atEnd = doc.content
-    atEnd.Collapse wdCollapseEnd
-    atEnd.InsertAfter txt & vbCr
-    With doc.Paragraphs.Last
-        .Range.style = styleName
-        .OutlineLevel = outlineLvl
-        .Range.ListFormat.RemoveNumbers
-    End With
 End Sub
 
 
-' =================== HEADING DETECTION ===================
-Private Function HeadingLevelFromNumber(ByVal s As String) As Long
-    Dim re As Object: Set re = CreateObject("VBScript.RegExp")
-    re.Pattern = "^\s*\d+(?:\.\d+)*\s*$"
-    re.IgnoreCase = True
-    If Not re.Test(s) Then Exit Function
+' ==========================================
+' HEADING DETECTION
+' ==========================================
+Function DetectHeadingLevel(ByVal txt As String) As Integer
+
+    Dim firstToken As String
+    Dim parts() As String
+    Dim i As Integer
+    Dim level As Integer
     
-    Dim parts() As String: parts = Split(s, ".")
-    Dim dots As Long: dots = UBound(parts)
+    firstToken = Split(txt, " ")(0)
     
-    If dots = 1 And val(parts(1)) = 0 Then
-        HeadingLevelFromNumber = 1   ' X.0 ? Main Heading (Heading 1)
-    ElseIf dots = 1 Then
-        HeadingLevelFromNumber = 2   ' X.Y ? Heading 2
-    Else
-        HeadingLevelFromNumber = dots + 1 ' X.Y.Z ? Heading 3+
-        If HeadingLevelFromNumber > 9 Then HeadingLevelFromNumber = 9
+    ' Must begin with digit
+    If Not firstToken Like "[0-9]*" Then
+        DetectHeadingLevel = 0
+        Exit Function
     End If
-End Function
-
-Private Function CleanHeadingText(ByVal s As String) As String
-    Dim re As Object: Set re = CreateObject("VBScript.RegExp")
-    re.Pattern = "^\s*\d+(?:\.\d+)*[\.\-\):]*\s*"
-    CleanHeadingText = Trim(re.Replace(s, ""))
-End Function
-
-' =================== EMITTERS ===================
-Private Sub InsertHeading(ByVal doc As Document, ByVal txt As String, ByVal lvl As Long)
-    Dim p As Paragraph
-    Set p = AppendPara(doc, txt)
     
-    ' Explicitly apply the correct Heading style
-    Select Case lvl
-        Case 1
-            p.Range.style = doc.Styles(wdStyleHeading1)
-            p.OutlineLevel = wdOutlineLevel1
-        Case 2
-            p.Range.style = doc.Styles(wdStyleHeading2)
-            p.OutlineLevel = wdOutlineLevel2
-        Case 3
-            p.Range.style = doc.Styles(wdStyleHeading3)
-            p.OutlineLevel = wdOutlineLevel3
-        Case Else
-            ' Default to Heading 9 if deeper
-            p.Range.style = doc.Styles(wdStyleHeading9)
-            p.OutlineLevel = wdOutlineLevelBodyText
-    End Select
+    parts = Split(firstToken, ".")
+    level = 0
     
-    ' Strip any numbering so only text remains
-    p.Range.ListFormat.RemoveNumbers
-End Sub
-
-
-Private Sub InsertBody(ByVal doc As Document, ByVal txt As String)
-    Dim p As Paragraph
-    Set p = AppendPara(doc, txt)
-    On Error Resume Next
-    p.Range.style = doc.Styles("Body Text")
-    p.OutlineLevel = wdOutlineLevelBodyText
-    p.Alignment = wdAlignParagraphJustify
-    p.Range.ListFormat.RemoveNumbers
-    On Error GoTo 0
-End Sub
-
-Private Function AppendPara(ByVal doc As Document, ByVal txt As String) As Paragraph
-    Dim atEnd As Range
-    Set atEnd = doc.content
-    atEnd.Collapse wdCollapseEnd
-    atEnd.InsertAfter txt & vbCrLf
-    Set AppendPara = doc.Paragraphs.Last
-End Function
-
-Private Sub ApplyHeadingStyleByLevel(ByVal p As Word.Paragraph, ByVal lvl As Long)
-    Dim L As Long: L = lvl
-    If L < 1 Then L = 1
-    If L > 9 Then L = 9
-    On Error Resume Next
-    Select Case L
-        Case 1: p.Range.style = p.Range.Document.Styles(wdStyleHeading1)
-        Case 2: p.Range.style = p.Range.Document.Styles(wdStyleHeading2)
-        Case 3: p.Range.style = p.Range.Document.Styles(wdStyleHeading3)
-        Case 4: p.Range.style = p.Range.Document.Styles(wdStyleHeading4)
-        Case 5: p.Range.style = p.Range.Document.Styles(wdStyleHeading5)
-        Case 6: p.Range.style = p.Range.Document.Styles(wdStyleHeading6)
-        Case 7: p.Range.style = p.Range.Document.Styles(wdStyleHeading7)
-        Case 8: p.Range.style = p.Range.Document.Styles(wdStyleHeading8)
-        Case Else: p.Range.style = p.Range.Document.Styles(wdStyleHeading9)
-    End Select
-    On Error GoTo 0
-End Sub
-
-' =================== UI HELPERS ===================
-Private Function PickOneDocx(ByVal Title As String) As String
-    With Application.FileDialog(msoFileDialogFilePicker)
-        .Title = Title
-        .AllowMultiSelect = False
-        .Filters.Clear
-        .Filters.Add "Word document", "*.docx"
-        If .Show = -1 Then PickOneDocx = .SelectedItems(1)
-    End With
-End Function
-
-Private Function PickTemplateDocOrDotx(ByVal Title As String) As String
-    With Application.FileDialog(msoFileDialogFilePicker)
-        .Title = Title
-        .AllowMultiSelect = False
-        .Filters.Clear
-        .Filters.Add "Word / Template", "*.docx;*.dotx"
-        If .Show = -1 Then PickTemplateDocOrDotx = .SelectedItems(1)
-    End With
-End Function
-
-Private Function PickSaveDocx(ByVal Title As String) As String
-    With Application.FileDialog(msoFileDialogSaveAs)
-        .Title = Title
-        .InitialFileName = "converted.docx"
-        If .Show = -1 Then
-            Dim sel As String: sel = .SelectedItems(1)
-            If LCase$(Right$(sel, 5)) <> ".docx" Then sel = sel & ".docx"
-            PickSaveDocx = sel
+    For i = 0 To UBound(parts)
+        If parts(i) <> "" And parts(i) <> "0" Then
+            level = level + 1
         End If
-    End With
+    Next i
+    
+    ' This ensures:
+    ' 1.0 ? Heading 1
+    ' 2.0 ? Heading 1
+    ' 3.0 ? Heading 1
+    
+    DetectHeadingLevel = level
+
 End Function
+
+
+Function CleanText(ByVal txt As String) As String
+    CleanText = Trim(Replace(txt, vbCr, ""))
+End Function
+
+
 
