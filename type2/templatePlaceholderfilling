@@ -1,5 +1,19 @@
 Option Explicit
 
+
+
+
+
+
+
+' ============================================================================
+' RUN FillTemplate_SimplifiedVersion Macro
+' ============================================================================
+
+
+
+
+
 ' ============================================================================
 ' TEMPLATE PLACEHOLDER FILLING MACRO - COMPLETE VERSION
 ' ============================================================================
@@ -851,6 +865,4 @@ Private Sub ExtractPlaceholdersFromText(text As String, placeholders As Collecti
     Loop
     
 End Sub
-
-
 
