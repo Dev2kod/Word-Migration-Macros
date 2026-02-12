@@ -1,144 +1,311 @@
 Option Explicit
 
-Sub MigrateUsingStructure()
+Sub ConvertInputToTemplate()
 
-    Dim srcPath As String
+    Dim inputDoc As Document
+    Dim templateDoc As Document
+    Dim outputDoc As Document
+
+    Dim inputPath As String
     Dim templatePath As String
     Dim savePath As String
-    
-    Dim srcDoc As Document
-    Dim outDoc As Document
-    Dim srcPara As Paragraph
-    Dim appendRange As Range
-    
-    Dim level As Integer
-    Dim txt As String
-    
-    ' ==========================
-    ' PICK SOURCE
-    ' ==========================
-    With Application.FileDialog(msoFileDialogFilePicker)
-        .title = "Select Source Document"
-        .Filters.Clear
-        .Filters.Add "Word Documents", "*.docx"
-        If .Show <> -1 Then Exit Sub
-        srcPath = .SelectedItems(1)
-    End With
-    
-    ' ==========================
-    ' PICK TEMPLATE
-    ' ==========================
-    With Application.FileDialog(msoFileDialogFilePicker)
-        .title = "Select Template Document"
-        .Filters.Clear
-        .Filters.Add "Word Template", "*.dotx; *.docx"
-        If .Show <> -1 Then Exit Sub
-        templatePath = .SelectedItems(1)
-    End With
-    
-    ' ==========================
-    ' SAVE LOCATION
-    ' ==========================
-    With Application.FileDialog(msoFileDialogSaveAs)
-        .title = "Save Output File"
-        .InitialFileName = "Migrated_Output.docx"
-        If .Show <> -1 Then Exit Sub
-        savePath = .SelectedItems(1)
-    End With
-    
-    Application.ScreenUpdating = False
-    
-    Set srcDoc = Documents.Open(srcPath, ReadOnly:=True)
-    Set outDoc = Documents.Add(Template:=templatePath)
-    
-    ' ==========================================
-    ' VERY IMPORTANT:
-    ' Collapse range AFTER template content
-    ' ==========================================
-    Set appendRange = outDoc.Range
-appendRange.Collapse wdCollapseEnd
 
-' Force new page using section break
-appendRange.InsertBreak Type:=wdSectionBreakNextPage
-appendRange.Collapse wdCollapseEnd
+    Dim para As Paragraph
+    Dim targetRange As Range
+    Dim textLine As String
+    Dim cleanText As String
 
+    '---------------------------
+    ' Pick files
+    '---------------------------
+    inputPath = GetFilePath("Select INPUT Word file")
+    If inputPath = "" Then Exit Sub
+
+    templatePath = GetFilePath("Select TEMPLATE Word file")
+    If templatePath = "" Then Exit Sub
+
+    savePath = GetSavePath()
+    If savePath = "" Then Exit Sub
+
+    '---------------------------
+    ' Open documents
+    '---------------------------
+    Set inputDoc = Documents.Open(inputPath, ReadOnly:=True)
+
+    Set templateDoc = Documents.Open(templatePath)
+    templateDoc.SaveAs2 savePath
+    Set outputDoc = ActiveDocument
+
+    '---------------------------
+    ' MODIFIED: Start writing AFTER all existing pages
+    ' Move to the end of the document and add page break
+    '---------------------------
+    Set targetRange = outputDoc.Range
+    targetRange.Collapse wdCollapseEnd
     
-    ' ==========================================
-    ' STRUCTURAL MIGRATION
-    ' ==========================================
-    For Each srcPara In srcDoc.Paragraphs
+    ' Insert a page break to ensure content starts on a completely new page
+    targetRange.InsertBreak Type:=wdPageBreak
+    
+    ' Move the range after the page break
+    targetRange.Collapse wdCollapseEnd
+
+    '---------------------------
+    ' Process input paragraphs (BODY ONLY - Skip Footers)
+    '---------------------------
+    For Each para In inputDoc.Paragraphs
         
-        txt = CleanText(srcPara.Range.text)
-        
-        If txt <> "" Then
-            
-            level = DetectHeadingLevel(txt)
-            
-            appendRange.InsertAfter txt & vbCr
-            appendRange.Collapse wdCollapseEnd
-            
-            If level > 0 Then
-                appendRange.Previous(wdParagraph, 1).style = _
-                    outDoc.Styles("Heading " & level)
-            Else
-                appendRange.Previous(wdParagraph, 1).style = _
-                    outDoc.Styles("Normal")
+        ' Skip if paragraph is in footer or header
+        If Not IsInHeaderFooter(para) Then
+
+            textLine = Trim(Replace(para.Range.text, vbCr, ""))
+
+            If textLine <> "" Then
+                
+                ' Skip footer-like content (file numbers, doc numbers, etc.)
+                If Not IsFooterLikeContent(textLine) Then
+
+                    ' Main heading (1.0, 2.0 ...)
+                    If IsMainHeading(textLine) Then
+                        cleanText = RemoveNumbering(textLine)
+                        InsertStyledParagraph targetRange, cleanText, "Heading 1"
+
+                    ' Collapsible points (1.1, 2.3 ...) - Collapsible with their own content
+                    ElseIf IsSubHeading(textLine) Then
+                        InsertCollapsiblePoint targetRange, textLine
+
+                    ' Normal content
+                    Else
+                        InsertStyledParagraph targetRange, textLine, "Normal"
+                    End If
+                    
+                End If
+
             End If
             
         End If
+    Next para
+
+    inputDoc.Close False
+
+    MsgBox "Document conversion completed successfully!", vbInformation
+
+End Sub
+
+'==================================================
+' Inserts text using style without extra spacing
+' with justified alignment and professional spacing
+'==================================================
+Sub InsertStyledParagraph(ByRef rng As Range, _
+                          ByVal textValue As String, _
+                          ByVal styleName As String)
+
+    rng.InsertAfter textValue
+    rng.Paragraphs(1).style = styleName
+
+    With rng.Paragraphs(1).Format
+        ' Professional spacing
+        .SpaceBefore = 6
+        .SpaceAfter = 6
+        .LineSpacingRule = wdLineSpaceMultiple
+        .LineSpacing = LinesToPoints(1.15)
         
-    Next srcPara
+        ' Justified alignment for professional look
+        .Alignment = wdAlignParagraphJustify
+
+        ' Pagination control
+        .KeepWithNext = False
+        .KeepTogether = False
+        .PageBreakBefore = False
+    End With
+
+    rng.InsertParagraphAfter
+    rng.Collapse wdCollapseEnd
+
+End Sub
+
+'==================================================
+' Inserts collapsible point (1.1, 1.2, etc.)
+' Uses Heading 2 for collapsibility but styled as normal text (NOT bold)
+'==================================================
+Sub InsertCollapsiblePoint(ByRef rng As Range, ByVal textValue As String)
+
+    rng.InsertAfter textValue
     
-    outDoc.SaveAs2 savePath
-    srcDoc.Close False
+    ' Apply Heading 2 style to make it collapsible
+    rng.Paragraphs(1).style = "Heading 2"
     
-    Application.ScreenUpdating = True
-    
-    MsgBox "Migration Complete.", vbInformation
+    With rng.Paragraphs(1)
+        
+        With .Format
+            ' Professional spacing
+            .SpaceBefore = 6
+            .SpaceAfter = 6
+            .LineSpacingRule = wdLineSpaceMultiple
+            .LineSpacing = LinesToPoints(1.15)
+            
+            ' Justified alignment
+            .Alignment = wdAlignParagraphJustify
+            
+            ' Pagination control
+            .KeepWithNext = False
+            .KeepTogether = False
+            .PageBreakBefore = False
+        End With
+        
+        ' Override Heading 2 formatting to keep it as normal text (NOT bold)
+        With .Range.Font
+            .Bold = False
+            .Size = 11  ' Standard body text size
+            .Name = "Calibri"  ' Or your preferred font
+        End With
+    End With
+
+    rng.InsertParagraphAfter
+    rng.Collapse wdCollapseEnd
 
 End Sub
 
 
-' ==========================================
-' HEADING DETECTION
-' ==========================================
-Function DetectHeadingLevel(ByVal txt As String) As Integer
+'==================================================
+' Check if paragraph is in header or footer
+'==================================================
+Function IsInHeaderFooter(para As Paragraph) As Boolean
+    On Error Resume Next
+    IsInHeaderFooter = (para.Range.StoryType = wdFootnotesStory Or _
+                        para.Range.StoryType = wdEndnotesStory Or _
+                        para.Range.StoryType = wdCommentsStory Or _
+                        para.Range.StoryType = wdTextFrameStory Or _
+                        para.Range.StoryType = wdEvenPagesFooterStory Or _
+                        para.Range.StoryType = wdPrimaryFooterStory Or _
+                        para.Range.StoryType = wdEvenPagesHeaderStory Or _
+                        para.Range.StoryType = wdPrimaryHeaderStory Or _
+                        para.Range.StoryType = wdFirstPageFooterStory Or _
+                        para.Range.StoryType = wdFirstPageHeaderStory)
+    On Error GoTo 0
+End Function
 
-    Dim firstToken As String
+'==================================================
+' Check if text looks like footer content
+' (file numbers, doc numbers, page numbers, etc.)
+'==================================================
+Function IsFooterLikeContent(textLine As String) As Boolean
+    Dim lowerText As String
+    lowerText = LCase(textLine)
+    
+    ' Common footer patterns to skip
+    IsFooterLikeContent = False
+    
+    ' Check for file/document number patterns
+    If InStr(lowerText, "file no") > 0 Then IsFooterLikeContent = True
+    If InStr(lowerText, "file number") > 0 Then IsFooterLikeContent = True
+    If InStr(lowerText, "doc no") > 0 Then IsFooterLikeContent = True
+    If InStr(lowerText, "doc number") > 0 Then IsFooterLikeContent = True
+    If InStr(lowerText, "document no") > 0 Then IsFooterLikeContent = True
+    If InStr(lowerText, "document number") > 0 Then IsFooterLikeContent = True
+    If InStr(lowerText, "page ") > 0 And InStr(lowerText, " of ") > 0 Then IsFooterLikeContent = True
+    
+    ' Check for very short lines that might be page numbers
+    If Len(textLine) <= 3 And IsNumeric(textLine) Then IsFooterLikeContent = True
+    
+End Function
+
+'==================================================
+' Detect main heading (ONLY X.0 format: 1.0, 2.0, 10.0, etc.)
+'==================================================
+Function IsMainHeading(textLine As String) As Boolean
     Dim parts() As String
-    Dim i As Integer
-    Dim level As Integer
+    Dim firstWord As String
     
-    firstToken = Split(txt, " ")(0)
+    IsMainHeading = False
     
-    ' Must begin with digit
-    If Not firstToken Like "[0-9]*" Then
-        DetectHeadingLevel = 0
-        Exit Function
+    ' Get the first word (should be the number)
+    If InStr(textLine, " ") > 0 Then
+        firstWord = Left(textLine, InStr(textLine, " ") - 1)
+    Else
+        firstWord = textLine
     End If
     
-    parts = Split(firstToken, ".")
-    level = 0
-    
-    For i = 0 To UBound(parts)
-        If parts(i) <> "" And parts(i) <> "0" Then
-            level = level + 1
+    ' Check if it matches X.0 pattern exactly
+    If InStr(firstWord, ".") > 0 Then
+        parts = Split(firstWord, ".")
+        If UBound(parts) = 1 Then  ' Only one dot
+            If IsNumeric(parts(0)) And parts(1) = "0" Then
+                IsMainHeading = True
+            End If
         End If
-    Next i
-    
-    ' This ensures:
-    ' 1.0 ? Heading 1
-    ' 2.0 ? Heading 1
-    ' 3.0 ? Heading 1
-    
-    DetectHeadingLevel = level
-
+    End If
 End Function
 
-
-Function CleanText(ByVal txt As String) As String
-    CleanText = Trim(Replace(txt, vbCr, ""))
+'==================================================
+' Detect collapsible points (X.Y format where Y is NOT 0: 1.1, 2.3, 10.5, etc.)
+'==================================================
+Function IsSubHeading(textLine As String) As Boolean
+    Dim parts() As String
+    Dim firstWord As String
+    
+    IsSubHeading = False
+    
+    ' Get the first word (should be the number)
+    If InStr(textLine, " ") > 0 Then
+        firstWord = Left(textLine, InStr(textLine, " ") - 1)
+    Else
+        firstWord = textLine
+    End If
+    
+    ' Check if it matches X.Y pattern (where Y is not 0)
+    If InStr(firstWord, ".") > 0 Then
+        parts = Split(firstWord, ".")
+        If UBound(parts) = 1 Then  ' Only one dot
+            If IsNumeric(parts(0)) And IsNumeric(parts(1)) Then
+                If CLng(parts(1)) > 0 Then  ' Y must be greater than 0
+                    IsSubHeading = True
+                End If
+            End If
+        End If
+    End If
 End Function
 
+'==================================================
+' Remove numeric prefix from heading
+'==================================================
+Function RemoveNumbering(textLine As String) As String
+    Dim pos As Long
+    pos = InStr(textLine, " ")
+    If pos > 0 Then
+        RemoveNumbering = Trim(Mid(textLine, pos + 1))
+    Else
+        RemoveNumbering = textLine
+    End If
+End Function
 
+'==================================================
+' File picker (input / template)
+'==================================================
+Function GetFilePath(title As String) As String
+    With Application.FileDialog(msoFileDialogFilePicker)
+        .title = title
+        .Filters.Clear
+        .Filters.Add "Word Documents", "*.docx"
+        .AllowMultiSelect = False
+        If .Show = -1 Then
+            GetFilePath = .SelectedItems(1)
+        Else
+            GetFilePath = ""
+        End If
+    End With
+End Function
 
+'==================================================
+' Save As dialog for output
+'==================================================
+Function GetSavePath() As String
+    With Application.FileDialog(msoFileDialogSaveAs)
+        .title = "Save OUTPUT file as"
+        .InitialFileName = "Converted_Document.docx"
+        If .Show = -1 Then
+            GetSavePath = .SelectedItems(1)
+        Else
+            GetSavePath = ""
+        End If
+    End With
+End Function
