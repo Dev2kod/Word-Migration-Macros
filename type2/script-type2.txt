@@ -69,9 +69,9 @@ Sub ConvertInputToTemplate()
                         cleanText = RemoveNumbering(textLine)
                         InsertStyledParagraph targetRange, cleanText, "Heading 1"
 
-                    ' Collapsible points (1.1, 2.3 ...) - Collapsible with their own content
+                    ' Points (1.1, 2.3 ...) - Just regular text with numbering
                     ElseIf IsSubHeading(textLine) Then
-                        InsertCollapsiblePoint targetRange, textLine
+                        InsertStyledParagraph targetRange, textLine, "Normal"
 
                     ' Normal content
                     Else
@@ -116,48 +116,6 @@ Sub InsertStyledParagraph(ByRef rng As Range, _
         .KeepWithNext = False
         .KeepTogether = False
         .PageBreakBefore = False
-    End With
-
-    rng.InsertParagraphAfter
-    rng.Collapse wdCollapseEnd
-
-End Sub
-
-'==================================================
-' Inserts collapsible point (1.1, 1.2, etc.)
-' Uses Heading 2 for collapsibility but styled as normal text (NOT bold)
-'==================================================
-Sub InsertCollapsiblePoint(ByRef rng As Range, ByVal textValue As String)
-
-    rng.InsertAfter textValue
-    
-    ' Apply Heading 2 style to make it collapsible
-    rng.Paragraphs(1).style = "Heading 2"
-    
-    With rng.Paragraphs(1)
-        
-        With .Format
-            ' Professional spacing
-            .SpaceBefore = 6
-            .SpaceAfter = 6
-            .LineSpacingRule = wdLineSpaceMultiple
-            .LineSpacing = LinesToPoints(1.15)
-            
-            ' Justified alignment
-            .Alignment = wdAlignParagraphJustify
-            
-            ' Pagination control
-            .KeepWithNext = False
-            .KeepTogether = False
-            .PageBreakBefore = False
-        End With
-        
-        ' Override Heading 2 formatting to keep it as normal text (NOT bold)
-        With .Range.Font
-            .Bold = False
-            .Size = 11  ' Standard body text size
-            .Name = "Calibri"  ' Or your preferred font
-        End With
     End With
 
     rng.InsertParagraphAfter
@@ -309,3 +267,5 @@ Function GetSavePath() As String
         End If
     End With
 End Function
+
+
