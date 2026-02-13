@@ -1,0 +1,598 @@
+Option Explicit
+
+' ======= BEHAVIOR TOGGLES =======
+Private Const ALIGN_BODY_JUSTIFY As Boolean = True
+Private Const HEADING_ALIGN_LEFT As Boolean = True
+Private Const HEADING_KEEP_WITH_NEXT As Boolean = True
+Private Const PAGEBREAK_BEFORE_APPENDIX As Boolean = True
+Private Const FORCE_H2_NOT_BOLD As Boolean = True
+
+' ======= HEADING INDENT SETTINGS =======
+Private Const HEADING_BASE_INDENT_CM As Double = 0
+Private Const HEADING_LEVEL_STEP_CM As Double = 0.75
+Private Const HEADING_NUMBER_GAP_CM As Double = 1.25
+
+Private Const BODY_ALIGN_UNDER_HEADING_TITLE As Boolean = True
+
+' ==========================================================
+' PIPELINE ENTRY (Do NOT rename)
+' ==========================================================
+Public Sub Code3_BuildDoc_FromXmlText_UsingTemplate_STRICT( _
+        ByVal xmlText As String, _
+        ByVal tplPath As String, _
+        ByVal outPath As String, _
+        Optional ByVal ui As Object)
+
+    Application.ScreenUpdating = False
+    Application.DisplayAlerts = wdAlertsNone
+    On Error GoTo CleanFail
+
+    Dim clean As String
+    clean = SanitizeXmlText(xmlText)
+
+    Dim dom As Object
+    Set dom = CreateObject("MSXML2.DOMDocument.6.0")
+    dom.async = False
+    dom.validateOnParse = False
+
+    If Not dom.LoadXML(clean) Then
+        If Not ui Is Nothing Then
+            ui.UI_Log "XML parse error: " & dom.parseError.Reason
+            ui.UI_Log "Line " & dom.parseError.line & ", Pos " & dom.parseError.Linepos
+            ui.UI_SetStatus "XML parse error."
+        End If
+        GoTo CleanExit
+    End If
+
+    Dim body As Object
+    Set body = dom.SelectSingleNode("/document/body")
+    If body Is Nothing Then
+        If Not ui Is Nothing Then
+            ui.UI_Log "XML error: <document><body> not found."
+            ui.UI_SetStatus "XML body missing."
+        End If
+        GoTo CleanExit
+    End If
+
+    ' Create output doc from template
+    Dim outDoc As Word.Document
+    Set outDoc = Documents.Add(Template:=tplPath, NewTemplate:=False)
+
+    On Error Resume Next
+    If outDoc.Windows.Count > 0 Then outDoc.Windows(1).Visible = False
+    On Error GoTo 0
+
+    ' Keep template cover page. Start content after a page break
+    InsertManualPageBreak outDoc
+
+    ' Emit content
+    If Not ui Is Nothing Then
+        ui.UI_Log "Writing body content..."
+        ui.UI_SetStatus "Writing body..."
+        DoEvents
+    End If
+
+    EmitBodyNodes_Type4 outDoc, body, ui
+
+    UpdateAllFields outDoc
+
+    outDoc.SaveAs2 FileName:=outPath, FileFormat:=wdFormatXMLDocument
+    outDoc.Close SaveChanges:=False
+
+CleanExit:
+    Application.DisplayAlerts = wdAlertsAll
+    Application.ScreenUpdating = True
+    Exit Sub
+
+CleanFail:
+    If Not ui Is Nothing Then
+        ui.UI_Log "ERROR in Code3: " & Err.Number & " - " & Err.Description
+        ui.UI_SetStatus "Error building final doc."
+    End If
+    Resume CleanExit
+End Sub
+
+' ==========================================================
+' Emit body nodes
+' ==========================================================
+Private Sub EmitBodyNodes_Type4(ByVal doc As Word.Document, ByVal bodyNode As Object, Optional ByVal ui As Object)
+
+    Dim currentHeadingLevel As Long
+    currentHeadingLevel = 1
+
+    Dim n As Object
+    For Each n In bodyNode.ChildNodes
+
+        Select Case LCase$(n.nodeName)
+
+            Case "p"
+                Dim raw As String
+                raw = Trim$(Replace(n.text, vbFormFeed, ""))
+
+                If Len(raw) = 0 Then GoTo NextNode
+
+                If IsAppendixTitle(raw) Then
+                    If PAGEBREAK_BEFORE_APPENDIX Then InsertManualPageBreak doc
+                    InsertHeadingTitleOnly doc, raw, 1
+                    currentHeadingLevel = 1
+                    GoTo NextNode
+                End If
+
+                Dim numText As String, titleText As String, lvl As Long
+                If TryParseNumberedHeading(raw, numText, titleText, lvl) Then
+                    InsertHeading_NumberTabTitle doc, numText, titleText, lvl
+                    currentHeadingLevel = lvl
+                Else
+                    InsertBodyParagraph_Indented doc, raw, currentHeadingLevel
+                End If
+
+            Case "table"
+                RenderXmlTable_ToWordTable doc, n
+                InsertBodyParagraph_Indented doc, "", currentHeadingLevel
+
+            Case "figure"
+                RenderXmlFigure_ToWord doc, n, ui
+                InsertBodyParagraph_Indented doc, "", currentHeadingLevel
+
+        End Select
+
+NextNode:
+    Next n
+End Sub
+
+' ==========================================================
+' Heading detection
+' ==========================================================
+Private Function TryParseNumberedHeading(ByVal line As String, _
+                                        ByRef numText As String, _
+                                        ByRef titleText As String, _
+                                        ByRef levelOut As Long) As Boolean
+    TryParseNumberedHeading = False
+    numText = "": titleText = "": levelOut = 0
+
+    Dim re As Object: Set re = CreateObject("VBScript.RegExp")
+    re.Global = False
+    re.IgnoreCase = True
+    re.Pattern = "^\s*(\d+(?:\.\d+)*)\s+(.+?)\s*$"
+
+    If Not re.Test(line) Then Exit Function
+
+    Dim m As Object
+    Set m = re.Execute(line)(0)
+
+    numText = Trim$(m.SubMatches(0))
+    titleText = Trim$(m.SubMatches(1))
+
+    If Len(numText) = 0 Or Len(titleText) = 0 Then Exit Function
+
+    levelOut = HeadingLevelFromNumber(numText)
+    If levelOut <= 0 Then Exit Function
+
+    TryParseNumberedHeading = True
+End Function
+
+Private Function HeadingLevelFromNumber(ByVal s As String) As Long
+    Dim parts() As String
+    parts = Split(Trim$(s), ".")
+
+    If UBound(parts) < 0 Then
+        HeadingLevelFromNumber = 0
+        Exit Function
+    End If
+
+    If UBound(parts) = 0 Then
+        HeadingLevelFromNumber = 0
+        Exit Function
+    End If
+
+    If UBound(parts) = 1 Then
+        If val(parts(1)) = 0 Then
+            HeadingLevelFromNumber = 1
+        Else
+            HeadingLevelFromNumber = 2
+        End If
+        Exit Function
+    End If
+
+    HeadingLevelFromNumber = UBound(parts) + 1
+    If HeadingLevelFromNumber > 9 Then HeadingLevelFromNumber = 9
+End Function
+
+' ==========================================================
+' Word emitters
+' ==========================================================
+' (InsertHeadingTitleOnly, InsertHeading_NumberTabTitle, FormatHeadingTabs,
+' InsertBodyParagraph_Indented, TitlePosForLevel, ApplyHeadingStyleByLevel,
+' RenderXmlTable_ToWordTable, MaxCellCount, LastNonEmptyCellIndex,
+' CleanCellText, RenderXmlFigure_ToWord, TCE_AppendPara, InsertManualPageBreak,
+' UpdateAllFields, TCE_BodyStyleName, TCE_StyleExists, IsAppendixTitle,
+' SanitizeXmlText, IsNoticeFooterTable)
+' ==========================================================
+' [All helper subs/functions remain exactly as in your provided code]
+
+End Function
+
+
+' ==========================================================
+' Word emitters: headings and body paragraphs
+' ==========================================================
+Private Sub InsertHeadingTitleOnly(ByVal doc As Word.Document, ByVal titleText As String, ByVal level As Long)
+    Dim p As Word.Paragraph
+    Set p = TCE_AppendPara(doc, Trim$(titleText))
+    ApplyHeadingStyleByLevel p, level
+
+    If FORCE_H2_NOT_BOLD And level = 2 Then
+        On Error Resume Next
+        p.Range.Font.Bold = False
+        On Error GoTo 0
+    End If
+
+    On Error Resume Next
+    If HEADING_ALIGN_LEFT Then p.Alignment = wdAlignParagraphLeft
+    If HEADING_KEEP_WITH_NEXT Then
+        p.KeepWithNext = True
+        p.KeepTogether = True
+    End If
+    On Error GoTo 0
+End Sub
+
+Private Sub InsertHeading_NumberTabTitle(ByVal doc As Word.Document, ByVal numText As String, ByVal titleText As String, ByVal level As Long)
+
+    Dim p As Word.Paragraph
+    Set p = TCE_AppendPara(doc, numText & vbTab & titleText)
+
+    ApplyHeadingStyleByLevel p, level
+
+    ' Remove template numbering if any
+    On Error Resume Next
+    p.Range.ListFormat.RemoveNumbers
+    On Error GoTo 0
+
+    If FORCE_H2_NOT_BOLD And level = 2 Then
+        On Error Resume Next
+        p.Range.Font.Bold = False
+        On Error GoTo 0
+    End If
+
+    ' Tab alignment like your sample
+    FormatHeadingTabs p, level
+
+    On Error Resume Next
+    If HEADING_ALIGN_LEFT Then p.Alignment = wdAlignParagraphLeft
+    If HEADING_KEEP_WITH_NEXT Then
+        p.KeepWithNext = True
+        p.KeepTogether = True
+    End If
+    On Error GoTo 0
+End Sub
+
+Private Sub FormatHeadingTabs(ByVal p As Word.Paragraph, ByVal level As Long)
+    Dim baseIndent As Single
+    Dim stepIndent As Single
+    Dim gap As Single
+
+    baseIndent = CentimetersToPoints(HEADING_BASE_INDENT_CM)
+    stepIndent = CentimetersToPoints(HEADING_LEVEL_STEP_CM)
+    gap = CentimetersToPoints(HEADING_NUMBER_GAP_CM)
+
+    Dim numberPos As Single, titlePos As Single
+    numberPos = baseIndent + (level - 1) * stepIndent
+    titlePos = numberPos + gap
+
+    With p.Format
+        .TabStops.ClearAll
+        .LeftIndent = titlePos
+        .FirstLineIndent = -gap
+        .TabStops.Add Position:=titlePos, Alignment:=wdAlignTabLeft, Leader:=wdTabLeaderSpaces
+    End With
+End Sub
+
+Private Sub InsertBodyParagraph_Indented(ByVal doc As Word.Document, ByVal text As String, ByVal currentHeadingLevel As Long)
+    Dim p As Word.Paragraph
+    Set p = TCE_AppendPara(doc, text)
+
+    Dim bodyStyleName As String
+    bodyStyleName = TCE_BodyStyleName(doc)
+
+    On Error Resume Next
+    p.Range.style = doc.Styles(bodyStyleName)
+    p.Range.ListFormat.RemoveNumbers
+    p.outlineLevel = wdOutlineLevelBodyText
+    If ALIGN_BODY_JUSTIFY Then p.Alignment = wdAlignParagraphJustify
+    On Error GoTo 0
+
+    If BODY_ALIGN_UNDER_HEADING_TITLE Then
+        Dim indentPts As Single
+        indentPts = TitlePosForLevel(currentHeadingLevel)
+        If indentPts > 0 Then
+            p.Format.LeftIndent = indentPts
+            p.Format.FirstLineIndent = 0
+        End If
+    End If
+End Sub
+
+Private Function TitlePosForLevel(ByVal level As Long) As Single
+    Dim baseIndent As Single
+    Dim stepIndent As Single
+    Dim gap As Single
+
+    baseIndent = CentimetersToPoints(HEADING_BASE_INDENT_CM)
+    stepIndent = CentimetersToPoints(HEADING_LEVEL_STEP_CM)
+    gap = CentimetersToPoints(HEADING_NUMBER_GAP_CM)
+
+    Dim numberPos As Single
+    numberPos = baseIndent + (level - 1) * stepIndent
+
+    TitlePosForLevel = numberPos + gap
+End Function
+
+Private Sub ApplyHeadingStyleByLevel(ByVal p As Word.Paragraph, ByVal lvl As Long)
+    Dim L As Long: L = lvl
+    If L < 1 Then L = 1
+    If L > 9 Then L = 9
+
+    On Error Resume Next
+    Select Case L
+        Case 1: p.Range.style = p.Range.Document.Styles(wdStyleHeading1)
+        Case 2: p.Range.style = p.Range.Document.Styles(wdStyleHeading2)
+        Case 3: p.Range.style = p.Range.Document.Styles(wdStyleHeading3)
+        Case 4: p.Range.style = p.Range.Document.Styles(wdStyleHeading4)
+        Case 5: p.Range.style = p.Range.Document.Styles(wdStyleHeading5)
+        Case 6: p.Range.style = p.Range.Document.Styles(wdStyleHeading6)
+        Case 7: p.Range.style = p.Range.Document.Styles(wdStyleHeading7)
+        Case 8: p.Range.style = p.Range.Document.Styles(wdStyleHeading8)
+        Case Else: p.Range.style = p.Range.Document.Styles(wdStyleHeading9)
+    End Select
+    On Error GoTo 0
+End Sub
+
+Private Sub RenderXmlTable_ToWordTable(ByVal doc As Word.Document, ByVal tableNode As Object)
+
+    Dim rows As Object
+    Set rows = tableNode.SelectNodes("row")
+    If rows Is Nothing Or rows.Length = 0 Then Exit Sub
+
+    Dim rCount As Long, cCount As Long
+    rCount = rows.Length
+    cCount = MaxCellCount(rows)  ' ? effective columns (ignores trailing empty cells)
+
+    ' If every row is fully empty, skip
+    If cCount <= 0 Then Exit Sub
+
+    Dim rng As Word.Range
+    Set rng = doc.content
+    rng.Collapse wdCollapseEnd
+
+    Dim tb As Word.Table
+    Set tb = doc.Tables.Add(Range:=rng, NumRows:=rCount, NumColumns:=cCount)
+    tb.Range.style = doc.Styles(wdStyleNormal)
+
+    Dim i As Long, j As Long
+    For i = 1 To rCount
+
+        Dim rowNode As Object
+        Set rowNode = rows.item(i - 1)
+
+        Dim cells As Object
+        Set cells = rowNode.SelectNodes("cell")
+
+        For j = 1 To cCount
+            Dim cellText As String
+            cellText = ""
+
+            If Not cells Is Nothing Then
+                If (j - 1) <= cells.Length - 1 Then
+                    cellText = CleanCellText(CStr(cells.item(j - 1).text))
+                End If
+            End If
+
+            tb.cell(i, j).Range.text = cellText
+        Next j
+    Next i
+
+    ' Basic formatting
+    On Error Resume Next
+    tb.AllowAutoFit = True
+    tb.AutoFitBehavior wdAutoFitWindow
+    tb.Borders.Enable = True
+    On Error GoTo 0
+
+    ' ? Preserve italics for the "notice/version control" table via pattern detection
+    If IsNoticeFooterTable(tableNode) Then
+        On Error Resume Next
+        tb.Range.Font.Italic = True
+        On Error GoTo 0
+    End If
+End Sub
+
+' Returns the maximum "effective" columns in the XML table:
+' i.e., ignores trailing empty cells in each row.
+Private Function MaxCellCount(ByVal rowNodeList As Object) As Long
+    Dim maxC As Long: maxC = 0
+    Dim i As Long
+
+    For i = 0 To rowNodeList.Length - 1
+        Dim rowNode As Object
+        Set rowNode = rowNodeList.item(i)
+
+        Dim cells As Object
+        Set cells = rowNode.SelectNodes("cell")
+
+        Dim lastIdx As Long
+        lastIdx = LastNonEmptyCellIndex(cells)
+
+        If lastIdx > maxC Then maxC = lastIdx
+    Next i
+
+    MaxCellCount = maxC
+End Function
+
+' Returns 1-based index of last NON-empty cell in a row.
+' If all are empty -> returns 0
+Private Function LastNonEmptyCellIndex(ByVal cells As Object) As Long
+    LastNonEmptyCellIndex = 0
+    If cells Is Nothing Then Exit Function
+    If cells.Length = 0 Then Exit Function
+
+    Dim j As Long
+    For j = cells.Length - 1 To 0 Step -1
+        Dim t As String
+        t = CleanCellText(CStr(cells.item(j).text))
+        If Len(t) > 0 Then
+            LastNonEmptyCellIndex = j + 1 ' convert 0-based to 1-based
+            Exit Function
+        End If
+    Next j
+End Function
+
+Private Function CleanCellText(ByVal s As String) As String
+    Dim t As String
+    t = Replace$(s, vbCr, "")
+    t = Replace$(t, vbLf, " ")
+    t = Replace$(t, Chr$(7), "")
+    CleanCellText = Trim$(t)
+End Function
+
+
+' ==========================================================
+' FIGURE rendering (optional)
+' <figure src="path" kind="inline|shape" />
+' ==========================================================
+Private Sub RenderXmlFigure_ToWord(ByVal doc As Word.Document, ByVal figNode As Object, Optional ByVal ui As Object)
+
+    Dim src As String: src = ""
+    On Error Resume Next
+    src = figNode.Attributes.getNamedItem("src").text
+    On Error GoTo 0
+
+    If Len(Trim$(src)) = 0 Then Exit Sub
+
+    Dim rng As Word.Range
+    Set rng = doc.content
+    rng.Collapse wdCollapseEnd
+
+    On Error Resume Next
+    doc.InlineShapes.AddPicture FileName:=src, LinkToFile:=False, SaveWithDocument:=True, Range:=rng
+    On Error GoTo 0
+
+    If Not ui Is Nothing Then ui.UI_Log "Inserted figure: " & src
+End Sub
+
+
+' ==========================================================
+' GENERAL HELPERS
+' ==========================================================
+Private Function TCE_AppendPara(ByVal doc As Word.Document, ByVal text As String) As Word.Paragraph
+    Dim endBefore As Long: endBefore = doc.content.End
+
+    Dim atEnd As Word.Range
+    Set atEnd = doc.content
+    atEnd.Collapse wdCollapseEnd
+    atEnd.InsertAfter text & vbCr
+
+    Dim justAdded As Word.Range
+    Set justAdded = doc.Range(Start:=endBefore, End:=doc.content.End)
+    Set TCE_AppendPara = justAdded.Paragraphs(1)
+End Function
+
+Private Sub InsertManualPageBreak(ByVal doc As Word.Document)
+    Dim atEnd As Word.Range
+    Set atEnd = doc.content
+    atEnd.Collapse wdCollapseEnd
+    atEnd.InsertBreak wdPageBreak
+End Sub
+
+Private Sub UpdateAllFields(ByVal doc As Word.Document)
+    On Error Resume Next
+
+    Dim s As Word.Range
+    For Each s In doc.StoryRanges
+        s.Fields.Update
+    Next s
+
+    Dim t As Word.TableOfContents
+    For Each t In doc.TablesOfContents
+        t.Update
+        t.UpdatePageNumbers
+    Next t
+
+    Dim tof As Word.TableOfFigures
+    For Each tof In doc.TablesOfFigures
+        tof.Update
+    Next tof
+
+    On Error GoTo 0
+End Sub
+
+Private Function TCE_BodyStyleName(ByVal doc As Word.Document) As String
+    If TCE_StyleExists(doc, "Body Text") Then
+        TCE_BodyStyleName = "Body Text"
+    Else
+        TCE_BodyStyleName = doc.Styles(wdStyleNormal).NameLocal
+    End If
+End Function
+
+Private Function TCE_StyleExists(ByVal doc As Word.Document, ByVal styleName As String) As Boolean
+    Dim sty As Variant
+    On Error Resume Next
+    Set sty = doc.Styles(styleName)
+    TCE_StyleExists = (Err.Number = 0)
+    Err.Clear
+    On Error GoTo 0
+End Function
+
+Private Function IsAppendixTitle(ByVal s As String) As Boolean
+    Dim re As Object: Set re = CreateObject("VBScript.RegExp")
+    re.IgnoreCase = True
+    re.Global = False
+    re.Pattern = "^\s*APPENDIX(\b|[\s\-\.:_])"
+    IsAppendixTitle = re.Test(s)
+End Function
+
+' SAFE: only remove illegal control chars (do NOT encode XML)
+Private Function SanitizeXmlText(ByVal s As String) As String
+    Dim i As Long
+    For i = 0 To 31
+        Select Case i
+            Case 9, 10, 13
+                ' keep TAB/LF/CR
+            Case Else
+                s = Replace$(s, Chr$(i), " ")
+        End Select
+    Next i
+
+    s = Replace$(s, vbCrLf, vbLf)
+    s = Replace$(s, vbCr, vbLf)
+
+    SanitizeXmlText = s
+End Function
+
+' Detects the footer notice table like:
+' Row 1 contains "FILE NAME:"
+' Row 2 contains "Proprietary Notice" or "Version Control"
+Private Function IsNoticeFooterTable(ByVal tableNode As Object) As Boolean
+
+    On Error GoTo SafeExit
+
+    Dim allText As String
+    allText = ""
+
+    Dim r As Object, c As Object
+    For Each r In tableNode.SelectNodes("row")
+        For Each c In r.SelectNodes("cell")
+            allText = allText & " " & UCase$(CleanCellText(CStr(c.text)))
+        Next c
+    Next r
+
+    allText = Trim$(allText)
+
+    If InStr(1, allText, "FILE NAME:", vbTextCompare) > 0 And _
+       (InStr(1, allText, "PROPRIETARY NOTICE", vbTextCompare) > 0 Or _
+        InStr(1, allText, "VERSION CONTROL", vbTextCompare) > 0) Then
+        IsNoticeFooterTable = True
+        Exit Function
+    End If
+
+SafeExit:
+    IsNoticeFooterTable = False
+End Function
