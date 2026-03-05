@@ -1,0 +1,1847 @@
+<main-frame title="Optimization of Pumping Main Diameter For Sewage System Considering Least Lifecycle Cost">
+    <div class="row needs-validation" novalidate>
+        <div class="col-lg-12">
+            <div id="idfFrames">
+                <!-- container for page-specific sub-frames -->
+                <sub-frame title="Input Data">
+                    <!-- Population for Stage 1 & Stage 2 -->
+                    <div class="row mt-2">
+                        <div class="col-lg-12">
+                            <div class="row d-flex align-items-center">
+                                <div class="col-lg-3">
+                                    <label for="TextBox1" class="form-label fw-bold">Population for Stage 1</label>
+                                </div>
+                                <div class="col-lg-3">
+                                    <div class="input-group">
+                                        <input type="number" id="TextBox1" class="form-control" required />
+                                    </div>
+                                </div>
+
+                                <div class="col-lg-3">
+                                    <label for="TextBox2" class="form-label fw-bold">Population for Stage 2</label>
+                                </div>
+                                <div class="col-lg-3">
+                                    <div class="input-group">
+                                        <input type="number" id="TextBox2" class="form-control" required />
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Flow for Stage 1 & Stage 2 -->
+                    <div class="row mt-2">
+                        <div class="col-lg-12">
+                            <div class="row d-flex align-items-center">
+                                <div class="col-lg-3">
+                                    <label for="TextBox3" class="form-label fw-bold">Flow for Stage 1 (Intermediate Flow- 1st 15 years)</label>
+                                </div>
+                                <div class="col-lg-3">
+                                    <div class="input-group">
+                                        <input type="number" id="TextBox3" class="form-control" required />
+                                        <span class="input-group-text">MLD</span>
+                                    </div>
+                                </div>
+
+                                <div class="col-lg-3">
+                                    <label for="TextBox4" class="form-label fw-bold">Flow for Stage 2 (Ultimate Flow - 15 to 30 years)</label>
+                                </div>
+                                <div class="col-lg-3">
+                                    <div class="input-group">
+                                        <input type="number" id="TextBox4" class="form-control" required />
+                                        <span class="input-group-text">MLD</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Pumping Hours & Length -->
+                    <div class="row mt-2">
+                        <div class="col-lg-12">
+                            <div class="row d-flex align-items-center">
+                                <div class="col-lg-3">
+                                    <label for="TextBox5" class="form-label fw-bold">Pumping Hours per day</label>
+                                </div>
+                                <div class="col-lg-3">
+                                    <div class="input-group">
+                                        <input type="number" id="TextBox5" class="form-control" required />
+                                        <span class="input-group-text">hrs</span>
+                                    </div>
+                                </div>
+
+                                <div class="col-lg-3">
+                                    <label for="TextBox6" class="form-label fw-bold">Length of pumping main</label>
+                                </div>
+                                <div class="col-lg-3">
+                                    <div class="input-group">
+                                        <input type="number" id="TextBox6" class="form-control" required />
+                                        <span class="input-group-text">m</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Peak & Non-Peak Hours -->
+                    <div class="row mt-2">
+                        <div class="col-lg-12">
+                            <div class="row d-flex align-items-center">
+                                <div class="col-lg-3">
+                                    <label for="TextBox7" class="form-label fw-bold">Peak flow hours per day</label>
+                                </div>
+                                <div class="col-lg-3">
+                                    <div class="input-group">
+                                        <input type="number" id="TextBox7" class="form-control" required />
+                                        <span class="input-group-text">hrs</span>
+                                    </div>
+                                </div>
+
+                                <div class="col-lg-3">
+                                    <label for="TextBox8" class="form-label fw-bold">Non Peak flow hours per day</label>
+                                </div>
+                                <div class="col-lg-3">
+                                    <div class="input-group">
+                                        <input type="number" id="TextBox8" class="form-control" readonly />
+                                        <span class="input-group-text">hrs</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Peak Factors -->
+                    <div class="row mt-2">
+                        <div class="col-lg-12">
+                            <div class="row d-flex align-items-center">
+                                <div class="col-lg-3">
+                                    <label for="TextBox9" class="form-label fw-bold">Peak factor for Stage 1</label>
+                                </div>
+                                <div class="col-lg-3">
+                                    <div class="input-group">
+                                        <input type="number" id="TextBox9" class="form-control" readonly />
+                                    </div>
+                                </div>
+
+                                <div class="col-lg-3">
+                                    <label for="TextBox10" class="form-label fw-bold">Peak factor for Stage 2</label>
+                                </div>
+                                <div class="col-lg-3">
+                                    <div class="input-group">
+                                        <input type="number" id="TextBox10" class="form-control" readonly />
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+
+                    <!-- MWL & LWL -->
+                    <div class="row mt-2">
+                        <div class="col-lg-12">
+                            <div class="row d-flex align-items-center">
+                                <div class="col-lg-3">
+                                    <label for="TextBox13" class="form-label fw-bold">Maximum Water Level (MWL) at delivery reservoir</label>
+                                </div>
+                                <div class="col-lg-3">
+                                    <div class="input-group">
+                                        <input type="number" id="TextBox13" class="form-control" required />
+                                        <span class="input-group-text">m</span>
+                                    </div>
+                                </div>
+
+                                <div class="col-lg-3">
+                                    <label for="TextBox14" class="form-label fw-bold">Low water level (LWL)/FVL at source</label>
+                                </div>
+                                <div class="col-lg-3">
+                                    <div class="input-group">
+                                        <input type="number" id="TextBox14" class="form-control" required />
+                                        <span class="input-group-text">m</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Residual Head & Pumping Station Losses -->
+                    <div class="row mt-2">
+                        <div class="col-lg-12">
+                            <div class="row d-flex align-items-center">
+                                <div class="col-lg-3">
+                                    <label for="TextBox15" class="form-label fw-bold">Minimum Residual Head at discharge point</label>
+                                </div>
+                                <div class="col-lg-3">
+                                    <div class="input-group">
+                                        <input type="number" id="TextBox15" class="form-control" required />
+                                        <span class="input-group-text">m</span>
+                                    </div>
+                                </div>
+
+                                <div class="col-lg-3">
+                                    <label for="TextBox16" class="form-label fw-bold">Pumping Station Losses (including suction, valves etc.)</label>
+                                </div>
+                                <div class="col-lg-3">
+                                    <div class="input-group">
+                                        <input type="number" id="TextBox16" class="form-control" required />
+                                        <span class="input-group-text">m</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Power Tariff & Escalation -->
+                    <div class="row mt-2">
+                        <div class="col-lg-12">
+                            <div class="row d-flex align-items-center">
+                                <div class="col-lg-3">
+                                    <label for="TextBox17" class="form-label fw-bold">Power Tariff or Energy charge</label>
+                                </div>
+                                <div class="col-lg-3">
+                                    <div class="input-group">
+                                        <input type="number" id="TextBox17" class="form-control" required />
+                                        <span class="input-group-text">₹/kWh</span>
+                                    </div>
+                                </div>
+
+                                <div class="col-lg-3">
+                                    <label for="TextBox18" class="form-label fw-bold">Escalation of power tariff per annum</label>
+                                </div>
+                                <div class="col-lg-3">
+                                    <div class="input-group">
+                                        <input type="number" id="TextBox18" class="form-control" required />
+                                        <span class="input-group-text">%</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Annual Interest & Inflation -->
+                    <div class="row mt-2">
+                        <div class="col-lg-12">
+                            <div class="row d-flex align-items-center">
+                                <div class="col-lg-3">
+                                    <label for="TextBox11" class="form-label fw-bold">Annual interest rate/ Discount rate</label>
+                                </div>
+                                <div class="col-lg-3">
+                                    <div class="input-group">
+                                        <input type="number" id="TextBox11" class="form-control" required />
+                                        <span class="input-group-text">%</span>
+                                    </div>
+                                </div>
+
+                                <div class="col-lg-3">
+                                    <label for="TextBox12" class="form-label fw-bold">Escalated rate/Rate of inflation</label>
+                                </div>
+                                <div class="col-lg-3">
+                                    <div class="input-group">
+                                        <input type="number" id="TextBox12" class="form-control" required />
+                                        <span class="input-group-text">%</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+
+                    <!-- Pipe Material & Class -->
+                    <div class="row mt-2">
+                        <div class="col-lg-12">
+                            <div class="row d-flex align-items-center">
+                                <div class="col-lg-3">
+                                    <label for="TextBox19" class="form-label fw-bold">Pipe Material considered</label>
+                                </div>
+                                <div class="col-lg-3">
+                                    <div class="input-group">
+                                        <select class="form-select" id="ddlm" required>
+                                            <option selected value="">--select--</option>
+                                            <option value="DI">DI</option>
+                                            <option value="CI">CI</option>
+                                            <option value="HDPE">HDPE</option>
+                                            <option value="MS">MS</option>
+                                            <option value="GRP">GRP</option>
+                                            <option value="PSC">PSC</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <div class="col-lg-3">
+                                    <label for="TextBox20" class="form-label fw-bold">Class of pipe</label>
+                                </div>
+                                <div class="col-lg-3">
+                                    <div class="input-group">
+                                        <input type="text" id="TextBox20" class="form-control" required />
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- No. of years to be considered -->
+                    <div class="row mt-2">
+                        <div class="col-lg-12">
+                            <div class="row d-flex align-items-center">
+                                <div class="col-lg-3">
+                                    <label for="No_of_years_1" class="form-label fw-bold">No of years to be considered for Stage 1 	</label>
+                                </div>
+                                <div class="col-lg-3">
+                                    <div class="input-group">
+                                        <input type="number" id="No_of_years_1" class="form-control" required />
+                                        <span class="input-group-text">years</span>
+                                    </div>
+                                </div>
+
+                                <div class="col-lg-3">
+                                    <label for="No_of_years_2" class="form-label fw-bold">No of years to be considered for Stage 2	</label>
+                                </div>
+                                <div class="col-lg-3">
+                                    <div class="input-group">
+                                        <input type="number" id="No_of_years_2" class="form-control" required />
+                                        <span class="input-group-text">years</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Design Periods -->
+                    <div class="row mt-2">
+                        <div class="col-lg-12">
+                            <div class="row d-flex align-items-center">
+                                <div class="col-lg-3">
+                                    <label for="TextBox21" class="form-label fw-bold">Design period of pipeline</label>
+                                </div>
+                                <div class="col-lg-3">
+                                    <div class="input-group">
+                                        <input type="number" id="TextBox21" class="form-control" required />
+                                        <span class="input-group-text">years</span>
+                                    </div>
+                                </div>
+
+                                <div class="col-lg-3">
+                                    <label for="TextBox22" class="form-label fw-bold">Design period of pumpsets</label>
+                                </div>
+                                <div class="col-lg-3">
+                                    <div class="input-group">
+                                        <input type="number" id="TextBox22" class="form-control" required />
+                                        <span class="input-group-text">years</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Efficiencies -->
+                    <div class="row mt-2">
+                        <div class="col-lg-12">
+                            <div class="row d-flex align-items-center">
+                                <div class="col-lg-3">
+                                    <label for="TextBox23" class="form-label fw-bold">Pump efficiency</label>
+                                </div>
+                                <div class="col-lg-3">
+                                    <div class="input-group">
+                                        <input type="number" id="TextBox23" class="form-control" required />
+                                        <span class="input-group-text">%</span>
+                                    </div>
+                                </div>
+
+                                <div class="col-lg-3">
+                                    <label for="TextBox24" class="form-label fw-bold">Motor efficiency</label>
+                                </div>
+                                <div class="col-lg-3">
+                                    <div class="input-group">
+                                        <input type="number" id="TextBox24" class="form-control" required />
+                                        <span class="input-group-text">%</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Costs & O&M -->
+                    <div class="row mt-2">
+                        <div class="col-lg-12">
+                            <div class="row d-flex align-items-center">
+                                <div class="col-lg-3">
+                                    <label for="TextBox25" class="form-label fw-bold">Cost of Pumpsets</label>
+                                </div>
+                                <div class="col-lg-3">
+                                    <div class="input-group">
+                                        <input type="number" id="TextBox25" class="form-control" required />
+                                        <span class="input-group-text">₹</span>
+                                    </div>
+                                </div>
+
+                                <div class="col-lg-3">
+                                    <label for="TextBox26" class="form-label fw-bold">O & M Cost Factor for Pumpsets per year</label>
+                                </div>
+                                <div class="col-lg-3">
+                                    <div class="input-group">
+                                        <input type="number" id="TextBox26" class="form-control" required />
+                                        <span class="input-group-text">%</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- O&M Pipeline & Hazen Williams -->
+                    <div class="row mt-2">
+                        <div class="col-lg-12">
+                            <div class="row d-flex align-items-center">
+                                <div class="col-lg-3">
+                                    <label for="TextBox27" class="form-label fw-bold">O & M Cost Factor for Pipeline per year</label>
+                                </div>
+                                <div class="col-lg-3">
+                                    <div class="input-group">
+                                        <input type="number" id="TextBox27" class="form-control" required />
+                                        <span class="input-group-text">%</span>
+                                    </div>
+                                </div>
+
+                                <div class="col-lg-3">
+                                    <label for="TextBox28" class="form-label fw-bold">Hazen Williams Roughness Coefficient (C value)</label>
+                                </div>
+                                <div class="col-lg-3">
+                                    <div class="input-group">
+                                        <input type="number" id="TextBox28" class="form-control" required />
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Standby -->
+                    <div class="row mt-2">
+                        <div class="col-lg-12">
+                            <div class="row d-flex align-items-center">
+                                <div class="col-lg-3">
+                                    <label for="TextBox29" class="form-label fw-bold">Proposed Standby</label>
+                                </div>
+                                <div class="col-lg-3">
+                                    <div class="input-group">
+                                        <input type="number" id="TextBox29" class="form-control" required />
+                                        <span class="input-group-text">%</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Average Hourly Flows -->
+                    <div class="row mt-2">
+                        <div class="col-lg-12">
+                            <div class="row d-flex align-items-center">
+                                <div class="col-lg-3">
+                                    <label for="TextBox30" class="form-label fw-bold">Average hourly flow to be considered for Stage 1</label>
+                                </div>
+                                <div class="col-lg-3">
+                                    <div class="input-group">
+                                        <input type="number" id="TextBox30" class="form-control" readonly />
+                                        <span class="input-group-text">
+                                            m&sup3/hr
+                                        </span>
+                                    </div>
+                                </div>
+
+                                <div class="col-lg-3">
+                                    <label for="TextBox31" class="form-label fw-bold">Average hourly flow to be considered for Stage 2</label>
+                                </div>
+                                <div class="col-lg-3">
+                                    <div class="input-group">
+                                        <input type="number" id="TextBox31" class="form-control" readonly />
+                                        <span class="input-group-text"> m&sup3/hr</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Peak Flows -->
+                    <div class="row mt-2">
+                        <div class="col-lg-12">
+                            <div class="row d-flex align-items-center">
+                                <div class="col-lg-3">
+                                    <label for="TextBox32" class="form-label fw-bold">Flow considered for Stage 1 in Peak flow hours</label>
+                                </div>
+                                <div class="col-lg-3">
+                                    <div class="input-group">
+                                        <input type="number" id="TextBox32" class="form-control" readonly />
+                                        <span class="input-group-text"> m&sup3</span>
+                                    </div>
+                                </div>
+
+                                <div class="col-lg-3">
+                                    <label for="TextBox33" class="form-label fw-bold">Flow considered for Stage 2 in Peak flow hours</label>
+                                </div>
+                                <div class="col-lg-3">
+                                    <div class="input-group">
+                                        <input type="number" id="TextBox33" class="form-control" readonly />
+                                        <span class="input-group-text"> m&sup3</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Hourly Peak Flows -->
+                    <div class="row mt-2">
+                        <div class="col-lg-12">
+                            <div class="row d-flex align-items-center">
+                                <div class="col-lg-3">
+                                    <label for="TextBox34" class="form-label fw-bold">Hourly peak flow for Stage 1</label>
+                                </div>
+                                <div class="col-lg-3">
+                                    <div class="input-group">
+                                        <input type="number" id="TextBox34" class="form-control" readonly />
+                                        <span class="input-group-text"> m&sup3/hr</span>
+                                    </div>
+                                </div>
+
+                                <div class="col-lg-3">
+                                    <label for="TextBox35" class="form-label fw-bold">Hourly peak flow for Stage 2</label>
+                                </div>
+                                <div class="col-lg-3">
+                                    <div class="input-group">
+                                        <input type="number" id="TextBox35" class="form-control" readonly />
+                                        <span class="input-group-text"> m&sup3/hr</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Balance Flows -->
+                    <div class="row mt-2">
+                        <div class="col-lg-12">
+                            <div class="row d-flex align-items-center">
+                                <div class="col-lg-3">
+                                    <label for="TextBox36" class="form-label fw-bold">Balance flow during non peak flow hours for Stage 1</label>
+                                </div>
+                                <div class="col-lg-3">
+                                    <div class="input-group">
+                                        <input type="number" id="TextBox36" class="form-control" readonly />
+                                        <span class="input-group-text"> m&sup3</span>
+                                    </div>
+                                </div>
+
+                                <div class="col-lg-3">
+                                    <label for="TextBox37" class="form-label fw-bold">Balance flow during non peak flow hours for Stage 2</label>
+                                </div>
+                                <div class="col-lg-3">
+                                    <div class="input-group">
+                                        <input type="number" id="TextBox37" class="form-control" readonly />
+                                        <span class="input-group-text"> m&sup3</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Non-Peak Demands -->
+                    <div class="row mt-2">
+                        <div class="col-lg-12">
+                            <div class="row d-flex align-items-center">
+                                <div class="col-lg-3">
+                                    <label for="TextBox38" class="form-label fw-bold">Non peak flow hourly demand for Stage 1</label>
+                                </div>
+                                <div class="col-lg-3">
+                                    <div class="input-group">
+                                        <input type="number" id="TextBox38" class="form-control" readonly />
+                                        <span class="input-group-text"> m&sup3/hr</span>
+                                    </div>
+                                </div>
+
+                                <div class="col-lg-3">
+                                    <label for="TextBox39" class="form-label fw-bold">Non peak flow hourly demand for Stage 2</label>
+                                </div>
+                                <div class="col-lg-3">
+                                    <div class="input-group">
+                                        <input type="number" id="TextBox39" class="form-control" readonly />
+                                        <span class="input-group-text"> m&sup3/hr</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <!------Table 1 ends---------->
+                    
+                    <div class="row mt-2">
+                        <div class="col-lg-6 ">
+                            <div class="row d-flex align-items-center">
+                                <div class="col-lg-12">
+                                    <p class="text-primary">
+                                        The maximum velocity considered = 3 m/sec and The minimum velocity considered =1.2 m/sec.
+                                        These velocity ranges are fixed in order to find the range of the optimum diameters of the pipe for economic pumping mains.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Max min diameter button row -->
+                    <div class="row mt-2">
+                        <div class="col-lg-12 ">
+                            <div class="row d-flex align-items-center">
+                                <div class="col-lg-3">
+                                    <button class="btn btn-primary" id="button4" onclick="buttonFourClick()">MAX. & MIN. DIAMETER</button>
+                                    <span> <label for="TextBox94" class="form-label fw-bold">Max. diameter</label> </span>
+                                </div>
+                                <div class="col-lg-3">
+                                    <input type="text" id="TextBox94" class="form-control" readonly />
+                                </div>
+
+                                <div class="col-lg-3">
+                                    <label for="TextBox95" class="form-label fw-bold">Minimum diameter</label>
+                                </div>
+                                <div class="col-lg-3">
+                                    <input type="text" id="TextBox95" class="form-control" readonly />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+            
+                    <div class="row mt-2">
+                        <div class="col-lg-12">
+                            <div class="row d-flex align-items-center">
+                                <div class="col-lg-3">
+                                    <label class="form-label fw-bold">Nominal Diameter considered</label>  <span class="text-primary">(Select the diameter between the calculated minimum and maximum diameters) </span>
+                                </div>
+                                <div class="col-lg-3">
+                                    <div class="input-group  d-none" id="paneld1">
+                                        <select class="form-select" id="ddld1">
+                                            <option disabled value="">--select--</option>
+                                            <option value="200">200</option>
+                                            <option selected value="300">300</option>
+                                            <option value="400">400</option>
+                                            <option value="500">500</option>
+                                            <option value="600">600</option>
+                                            <option value="700">700</option>
+                                            <option value="800">800</option>
+                                            <option value="900">900</option>
+                                            <option value="1000">1000</option>
+                                            <option value="1100">1100</option>
+                                            <option value="1200">1200</option>
+                                            <option value="1300">1300</option>
+                                            <option value="1400">1500</option>
+                                            <option value="1600">1600</option>
+                                            <option value="1700">1700</option>
+                                            <option value="1800">1800</option>
+                                            <option value="1900">1900</option>
+                                            <option value="2000">2000</option>
+                                            <option value="2100">2100</option>
+                                        </select>
+                                        <span class="input-group-text">mm</span>
+                                    </div>
+
+
+                                @*     <div class="input-group  d-none" id="paneld2">
+                                        <select class="form-select" id="ddld2">
+                                            <option disabled value="">--select--</option>
+                                            <option selected value="300">300</option>
+                                            <option value="400">400</option>
+                                            <option value="500">500</option>
+                                            <option value="600">600</option>
+                                            <option value="700">700</option>
+                                            <option value="800">800</option>
+                                            <option value="900">900</option>
+                                            <option value="1000">1000</option>
+                                            <option value="1100">1100</option>
+                                            <option value="1200">1200</option>
+                                            <option value="1300">1300</option>
+                                            <option value="1400">1500</option>
+                                            <option value="1600">1600</option>
+                                            <option value="1700">1700</option>
+                                            <option value="1800">1800</option>
+                                        </select>
+                                        <span class="input-group-text">mm</span>
+                                    </div>
+
+
+                                    <div class="input-group  d-none" id="paneld3">
+                                        <select class="form-select" id="ddld3">
+                                            <option disabled value="">--select--</option>
+                                            <option selected value="160">160</option>
+                                            <option value="200">200</option>
+                                            <option value="250">250</option>
+                                            <option value="600">315</option>
+                                            <option value="400">400</option>
+                                            <option value="450">450</option>
+                                            <option value="500">500</option>
+                                            <option value="560">560</option>
+                                            <option value="630">630</option>
+                                        </select>
+                                        <span class="input-group-text">mm</span>
+                                    </div>
+
+
+                                    <div class="input-group  d-none" id="paneld4">
+                                        <select class="form-select" id="ddld4">
+                                            <option disabled value="">--select--</option>
+                                            <option value="600">600</option>
+                                            <option value="700">700</option>
+                                            <option value="800">800</option>
+                                            <option value="900">900</option>
+                                            <option value="1000">1000</option>
+                                            <option value="1100">1100</option>
+                                            <option value="1200">1200</option>
+                                            <option value="1300">1300</option>
+                                            <option value="1400">1500</option>
+                                            <option value="1600">1600</option>
+                                            <option value="1700">1700</option>
+                                            <option value="1800">1800</option>
+                                        </select>
+                                        <span class="input-group-text">mm</span>
+                                    </div>
+
+
+                                    <div class="input-group  d-none" id="paneld5">
+                                        <select class="form-select" id="ddld5">
+                                            <option disabled value="">--select--</option>
+                                            <option value="300">300</option>
+                                            <option value="400">400</option>
+                                            <option value="500">500</option>
+                                            <option value="600">600</option>
+                                            <option value="700">700</option>
+                                            <option value="800">800</option>
+                                            <option value="900">900</option>
+                                            <option value="1000">1000</option>
+                                        </select>
+                                        <span class="input-group-text">mm</span>
+                                    </div>
+
+
+                                    <div class="input-group  d-none" id="paneld6">
+                                        <select class="form-select" id="ddld6">
+                                            <option disabled value="">--select--</option>
+                                            <option value="350">350</option>
+                                            <option value="400">400</option>
+                                            <option value="500">500</option>
+                                            <option value="600">600</option>
+                                            <option value="700">700</option>
+                                            <option value="800">800</option>
+                                            <option value="900">900</option>
+                                            <option value="1000">1000</option>
+                                        </select>
+                                        <span class="input-group-text">mm</span>
+                                    </div> *@
+                                </div>
+                                <div class="col-lg-3">
+                                    <label class="form-label fw-bold">Material Unit Rate </label> <span class="text-primary">(including complete laying and jointing , excavation, bedding,refilling)n, bedding,refilling)</span>
+                                </div>
+                                <div class="col-lg-3">
+                                    <div class="input-group">
+                                    <input type="text" id="TextBox96" class="form-control" required />
+                                    <span class="input-group-text"> ₹/Rm</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- row 17 -->
+                    <div class="row mt-2">
+                        <div class="col-lg-12 ">
+                            <div class="row d-flex align-items-center">
+                                <div class="col-lg-3">
+                                    <label for="txt_di" class="form-label fw-bold">Pipe internal diameter</label>
+                                </div>
+                                <div class="col-lg-3">
+                                    <div class="input-group">
+                                        <input type="number" id="txt_di" class="form-control" required />
+                                        <span class="input-group-text">mm</span>
+                                    </div>
+                                </div>
+
+                                <div class="col-lg-3">
+                                    <label for="txt_tw" class="form-label fw-bold">Wall thickness of pipe</label>
+                                </div>
+                                <div class="col-lg-3">
+                                    <div class="input-group">
+                                        <input type="number" value="25" id="txt_tw" class="form-control" required />
+                                        <span class="input-group-text">mm</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- row 18 -->
+                    <div class="row mt-2">
+                        <div class="col-lg-12 ">
+                            <div class="row d-flex align-items-center">
+                                <div class="col-lg-3">
+                                    <label for="txt_k" class="form-label fw-bold">Bulk modulus of water</label>
+                                </div>
+                                <div class="col-lg-3">
+                                    <div class="input-group">
+                                        <input type="number" id="txt_k" value="207000000" class="form-control" required />
+                                        <span class="input-group-text">kg/m2</span>
+                                    </div>
+                                </div>
+
+                                <div class="col-lg-3">
+                                    <label for="txt_E" class="form-label fw-bold">Modulus of elasticity of pipe material</label>
+                                </div>
+                                <div class="col-lg-3">
+                                    <div class="input-group">
+                                        <input type="number" id="txt_E" value="21000000000" class="form-control" required />
+                                        <span class="input-group-text">kg/m2</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- row 19 -->
+                    <div class="row mt-2">
+                        <div class="col-lg-6 ">
+                            <div class="row d-flex align-items-center">
+                                <div class="col-lg-6">
+                                    <label for="txt_pr1" class="form-label fw-bold">Allowable withstanding pressure of selected pipe </label>
+                                    <span class="text-primary">(from IS Code)</span>
+                                </div>
+                                <div class="col-lg-6">
+                                    <div class="input-group">
+                                        <input type="number" value="450" id="txt_pr1" class="form-control" required />
+                                        <span class="input-group-text">mwc</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- row 20 -->
+                    <div class="row mt-2">
+                        <div class="col-lg-12 ">
+                            <div class="row d-flex align-items-center">
+                                <div class="col-lg-3">
+                                    <button class="btn btn-primary" id="button5" disabled onclick="buttonFiveClick()">WATER HAMMER CHECK FOR STAGES</button>
+                                    <p class="text-primary">(Click the button to have the water hammer check)</p>
+                                </div>
+                                <div class="col-lg-3 text-danger ">
+                                    <span class="d-none" id="Label1">Select a higher class of pipe</span>
+                                    <span class="d-none" id="Label2">Use a water hammer controlling device</span>
+                                    <span class="d-none" id="Label3">No changes recommended</span>
+                                </div>
+
+                                <div class="col-lg-3">
+                                </div>
+
+                                <div class="col-lg-3 text-danger ">
+                                    <span class="d-none" id="Label4">Select a higher class of pipe</span>
+                                    <span class="d-none" id="Label5">Use a water hammer controlling device</span>
+                                    <span class="d-none" id="Label6">No changes recommended</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </sub-frame>
+
+                <!-------------------------------------------------------------------------------------------------------------------------------------->
+
+
+                <sub-frame title="Calculated Results">
+                    <form-box>
+                        <!--------------------------------------------------------------->
+                    <div class="row mt-2">
+                        <div class="col-lg-12">
+                            <div class="row d-flex align-items-center">
+                                <div class="col-lg-3">
+                                    <label for="res_actualVelocity_stage1" class="form-label fw-bold"> Actual velocity for Stage 1	</label>
+                                </div>
+                                <div class="col-lg-3">
+                                    <div class="input-group">
+                                        <input type="number" id="res_actualVelocity_stage1" class="form-control" readonly />
+                                        <span class="input-group-text"> m/sec</span>
+                                    </div>
+                                </div>
+
+                                <div class="col-lg-3">
+                                    <label for="res_actualVelocity_stage2" class="form-label fw-bold">Actual velocity for Stage 2	</label>
+                                </div>
+                                <div class="col-lg-3">
+                                    <div class="input-group">
+                                        <input type="number" id="res_actualVelocity_stage2" class="form-control" readonly />
+                                        <span class="input-group-text"> m/sec</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!--------------------------------------------------------------->
+                    <div class="row mt-2">
+                        <div class="col-lg-12">
+                            <div class="row d-flex align-items-center">
+                                <div class="col-lg-3">
+                                    <label for="res_friction_peak_stage1" class="form-label fw-bold"> Frictional loss corresponding to Peak flow for Stage 1		</label>
+                                </div>
+                                <div class="col-lg-3">
+                                    <div class="input-group">
+                                        <input type="number" id="res_friction_peak_stage1" class="form-control" readonly />
+                                        <span class="input-group-text"> m</span>
+                                    </div>
+                                </div>
+
+                                <div class="col-lg-3">
+                                    <label for="res_friction_peak_stage2" class="form-label fw-bold">Frictional loss corresponding to Peak flow for Stage 2		</label>
+                                </div>
+                                <div class="col-lg-3">
+                                    <div class="input-group">
+                                        <input type="number" id="res_friction_peak_stage2" class="form-control" readonly />
+                                        <span class="input-group-text"> m</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <!--------------------------------------------------------------->
+                    <div class="row mt-2">
+                        <div class="col-lg-12">
+                            <div class="row d-flex align-items-center">
+                                <div class="col-lg-3">
+                                    <label for="res_friction_nonpeak_stage1" class="form-label fw-bold">Frictional loss corresponding to Non Peak flow for Stage 1		</label>
+                                </div>
+                                <div class="col-lg-3">
+                                    <div class="input-group">
+                                        <input type="number" id="res_friction_nonpeak_stage1" class="form-control" readonly />
+                                        <span class="input-group-text"> m</span>
+                                    </div>
+                                </div>
+
+                                <div class="col-lg-3">
+                                    <label for="res_friction_nonpeak_stage2" class="form-label fw-bold">Frictional loss corresponding to Non Peak flow for Stage 2		</label>
+                                </div>
+                                <div class="col-lg-3">
+                                    <div class="input-group">
+                                        <input type="number" id="res_friction_nonpeak_stage2" class="form-control" readonly />
+                                        <span class="input-group-text"> m</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <!--------------------------------------------------------------->
+                    <div class="row mt-2">
+                        <div class="col-lg-12">
+                            <div class="row d-flex align-items-center">
+                                <div class="col-lg-3">
+                                    <label for="res_totalHead_peak_stage1" class="form-label fw-bold">Total head on pump during peak flow for stage 1	</label>
+                                </div>
+                                <div class="col-lg-3">
+                                    <div class="input-group">
+                                        <input type="number" id="res_totalHead_peak_stage1" class="form-control" readonly />
+                                        <span class="input-group-text"> m</span>
+                                    </div>
+                                </div>
+
+                                <div class="col-lg-3">
+                                    <label for="res_totalHead_peak_stage2" class="form-label fw-bold">Total head on pump during peak flow for stage 2		</label>
+                                </div>
+                                <div class="col-lg-3">
+                                    <div class="input-group">
+                                        <input type="number" id="res_totalHead_peak_stage2" class="form-control" readonly />
+                                        <span class="input-group-text"> m</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <!--------------------------------------------------------------->
+                    <div class="row mt-2">
+                        <div class="col-lg-12">
+                            <div class="row d-flex align-items-center">
+                                <div class="col-lg-3">
+                                    <label for="res_totalHead_nonpeak_stage1" class="form-label fw-bold">Total head on pump during non peak flow for Stage 1		</label>
+                                </div>
+                                <div class="col-lg-3">
+                                    <div class="input-group">
+                                        <input type="number" id="res_totalHead_nonpeak_stage1" class="form-control" readonly />
+                                        <span class="input-group-text"> m</span>
+                                    </div>
+                                </div>
+
+                                <div class="col-lg-3">
+                                    <label for="res_totalHead_nonpeak_stage2" class="form-label fw-bold">Total head on pump during non peak flow for Stage 2		</label>
+                                </div>
+                                <div class="col-lg-3">
+                                    <div class="input-group">
+                                        <input type="number" id="res_totalHead_nonpeak_stage2" class="form-control" readonly />
+                                        <span class="input-group-text"> m</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <!--------------------------------------------------------------->
+                    <div class="row mt-2">
+                        <div class="col-lg-12">
+                            <div class="row d-flex align-items-center">
+                                <div class="col-lg-3">
+                                    <label for="res_pumpKW_peak_stage1" class="form-label fw-bold">Pump kW during peak flow for Stage 1		</label>
+                                </div>
+                                <div class="col-lg-3">
+                                    <div class="input-group">
+                                        <input type="number" id="res_pumpKW_peak_stage1" class="form-control" readonly />
+                                        <span class="input-group-text"> kW</span>
+                                    </div>
+                                </div>
+
+                                <div class="col-lg-3">
+                                    <label for="res_pumpKW_peak_stage2" class="form-label fw-bold">Pump kW during peak flow for Stage 2		</label>
+                                </div>
+                                <div class="col-lg-3">
+                                    <div class="input-group">
+                                        <input type="number" id="res_pumpKW_peak_stage2" class="form-control" readonly />
+                                        <span class="input-group-text"> kW</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <!--------------------------------------------------------------->
+                    <div class="row mt-2">
+                        <div class="col-lg-12">
+                            <div class="row d-flex align-items-center">
+                                <div class="col-lg-3">
+                                    <label for="res_pumpKW_nonpeak_stage1" class="form-label fw-bold">Pump kW during non peak flow for Stage 1		</label>
+                                </div>
+                                <div class="col-lg-3">
+                                    <div class="input-group">
+                                        <input type="number" id="res_pumpKW_nonpeak_stage1" class="form-control" readonly />
+                                        <span class="input-group-text"> kW</span>
+                                    </div>
+                                </div>
+
+                                <div class="col-lg-3">
+                                    <label for="res_pumpKW_nonpeak_stage2" class="form-label fw-bold">Pump kW  during non peak flow for Stage 2		</label>
+                                </div>
+                                <div class="col-lg-3">
+                                    <div class="input-group">
+                                        <input type="number" id="res_pumpKW_nonpeak_stage2" class="form-control" readonly />
+                                        <span class="input-group-text"> kW</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <!--------------------------------------------------------------->
+                    <div class="row mt-2">
+                        <div class="col-lg-12">
+                            <div class="row d-flex align-items-center">
+                                <div class="col-lg-3">
+                                    <label for="res_totalPumpKW_stage1" class="form-label fw-bold">Total pump kW for stage 1		</label>
+                                </div>
+                                <div class="col-lg-3">
+                                    <div class="input-group">
+                                        <input type="number" id="res_totalPumpKW_stage1" class="form-control" readonly />
+                                        <span class="input-group-text"> kW</span>
+                                    </div>
+                                </div>
+
+                                <div class="col-lg-3">
+                                    <label for="res_totalPumpKW_stage2" class="form-label fw-bold">Total pump kW for stage 2		</label>
+                                </div>
+                                <div class="col-lg-3">
+                                    <div class="input-group">
+                                        <input type="number" id="res_totalPumpKW_stage2" class="form-control" readonly />
+                                        <span class="input-group-text"> kW</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <!--------------------------------------------------------------->
+                    <div class="row mt-2">
+                        <div class="col-lg-12">
+                            <div class="row d-flex align-items-center">
+                                <div class="col-lg-3">
+                                    <label for="res_waterHammer_stage1" class="form-label fw-bold">Water hammer head for Stage 1		</label>
+                                </div>
+                                <div class="col-lg-3">
+                                    <div class="input-group">
+                                        <input type="number" id="res_waterHammer_stage1" class="form-control" readonly />
+                                        <span class="input-group-text"> m</span>
+                                    </div>
+                                </div>
+
+                                <div class="col-lg-3">
+                                    <label for="res_waterHammer_stage2" class="form-label fw-bold">Water hammer head for Stage 2		</label>
+                                </div>
+                                <div class="col-lg-3">
+                                    <div class="input-group">
+                                        <input type="number" id="res_waterHammer_stage2" class="form-control" readonly />
+                                        <span class="input-group-text"> m</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+
+                    <!--------------------------------------------------------------->
+                    <div class="row mt-2">
+                        <div class="col-lg-12">
+                            <div class="row d-flex align-items-center">
+                                <div class="col-lg-3">
+                                    <label for="res_capitalCost_pumpsets_stage1" class="form-label fw-bold">Capital cost of pumpsets for Stage 1		</label>
+                                </div>
+                                <div class="col-lg-3">
+                                    <div class="input-group">
+                                        <input type="number" id="res_capitalCost_pumpsets_stage1" class="form-control" readonly />
+                                        <span class="input-group-text"> Lakhs</span>
+                                    </div>
+                                </div>
+
+                                <div class="col-lg-3">
+                                    <label for="res_npv_replacement_stage2" class="form-label fw-bold">Net Present value of Replacement costs(Capital cost of pumpsets for Stage 2)		</label>
+                                </div>
+                                <div class="col-lg-3">
+                                    <div class="input-group">
+                                        <input type="number" id="res_npv_replacement_stage2" class="form-control" readonly />
+                                        <span class="input-group-text"> Lakhs</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <!--------------------------------------------------------------->
+                    <div class="row mt-2">
+                        <div class="col-lg-12">
+                            <div class="row d-flex align-items-center">
+                                <div class="col-lg-3">
+                                    <label for="res_x_factor" class="form-label fw-bold">X factor		</label>
+                                </div>
+                                <div class="col-lg-3">
+                                    <input type="number" id="res_x_factor" class="form-control" readonly />
+                                </div>
+
+                                <div class="col-lg-3">
+                                </div>
+                                <div class="col-lg-3">
+                               </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!--------------------------------------------------------------->
+                    <div class="row mt-2">
+                        <div class="col-lg-12">
+                            <div class="row d-flex align-items-center">
+                                <div class="col-lg-3">
+                                    <label for="res_capitalCost_pumpsets_stage1_2" class="form-label fw-bold">Capital cost of pumpsets for Stage 1		</label>
+                                </div>
+                                <div class="col-lg-3">
+                                    <div class="input-group">
+                                        <input type="number" id="res_capitalCost_pumpsets_stage1_2" class="form-control" readonly />
+                                        <span class="input-group-text"> Lakhs</span>
+                                    </div>
+                                </div>
+
+                                <div class="col-lg-3">
+                                    <label for="res_npv_replacement_stage2_2" class="form-label fw-bold">Net Present value of Replacement costs(Capital cost of pumpsets for Stage 2)		</label>
+                                </div>
+                                <div class="col-lg-3">
+                                    <div class="input-group">
+                                        <input type="number" id="res_npv_replacement_stage2_2" class="form-control" readonly />
+                                        <span class="input-group-text"> Lakhs</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <!--------------------------------------------------------------->
+                    <div class="row mt-2">
+                        <div class="col-lg-12">
+                            <div class="row d-flex align-items-center">
+                                <div class="col-lg-3">
+                                    <label for="res_power_year_peak_stage1" class="form-label fw-bold">Power required in one year during peak flow for Stage 1		</label>
+                                </div>
+                                <div class="col-lg-3">
+                                    <div class="input-group">
+                                        <input type="number" id="res_power_year_peak_stage1" class="form-control" readonly />
+                                        <span class="input-group-text"> kW</span>
+                                    </div>
+                                </div>
+
+                                <div class="col-lg-3">
+                                    <label for="res_power_year_peak_stage2" class="form-label fw-bold">Power required in one year during peak flow for Stage 2		</label>
+                                </div>
+                                <div class="col-lg-3">
+                                    <div class="input-group">
+                                        <input type="number" id="res_power_year_peak_stage2" class="form-control" readonly />
+                                        <span class="input-group-text"> kW</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!--------------------------------------------------------------->
+                    <div class="row mt-2">
+                        <div class="col-lg-12">
+                            <div class="row d-flex align-items-center">
+                                <div class="col-lg-3">
+                                    <label for="res_power_year_nonpeak_stage1" class="form-label fw-bold">
+                                        Power required in one year during non peak flow for Stage 1
+                                    </label>
+                                </div>
+                                <div class="col-lg-3">
+                                    <div class="input-group">
+                                        <input type="number" id="res_power_year_nonpeak_stage1" class="form-control" readonly />
+                                        <span class="input-group-text"> kW</span>
+                                    </div>
+                                </div>
+
+                                <div class="col-lg-3">
+                                    <label for="res_power_year_nonpeak_stage2" class="form-label fw-bold">Power required in one year during non peak flow for Stage 2		</label>
+                                </div>
+                                <div class="col-lg-3">
+                                    <div class="input-group">
+                                        <input type="number" id="res_power_year_nonpeak_stage2" class="form-control" readonly />
+                                        <span class="input-group-text"> kW</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <!--------------------------------------------------------------->
+                    <div class="row mt-2">
+                        <div class="col-lg-12">
+                            <div class="row d-flex align-items-center">
+                                <div class="col-lg-3">
+                                    <label for="res_totalPowerYear_stage1" class="form-label fw-bold">
+                                        Total power required in one year for Stage 1
+                                    </label>
+                                </div>
+                                <div class="col-lg-3">
+                                    <div class="input-group">
+                                        <input type="number" id="res_totalPowerYear_stage1" class="form-control" readonly />
+                                        <span class="input-group-text"> kW</span>
+                                    </div>
+                                </div>
+
+                                <div class="col-lg-3">
+                                    <label for="res_totalPowerYear_stage2" class="form-label fw-bold">Total power required in one year for Stage 2		</label>
+                                </div>
+                                <div class="col-lg-3">
+                                    <div class="input-group">
+                                        <input type="number" id="res_totalPowerYear_stage2" class="form-control" readonly />
+                                        <span class="input-group-text"> kW</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!--------------------------------------------------------------->
+                    <div class="row mt-2">
+                        <div class="col-lg-12">
+                            <div class="row d-flex align-items-center">
+                                <div class="col-lg-3">
+                                    <label for="res_powerCost_perYear_stage1" class="form-label fw-bold">
+                                        Power cost in Stage I per year
+                                    </label>
+                                </div>
+                                <div class="col-lg-3">
+                                    <div class="input-group">
+                                        <input type="number" id="res_powerCost_perYear_stage1" class="form-control" readonly />
+                                        <span class="input-group-text"> Lakhs</span>
+                                    </div>
+                                </div>
+
+                                <div class="col-lg-3">
+                                    <label for="res_powerCost_perYear_stage2" class="form-label fw-bold">Power cost in Stage II per year		</label>
+                                </div>
+                                <div class="col-lg-3">
+                                    <div class="input-group">
+                                        <input type="number" id="res_powerCost_perYear_stage2" class="form-control" readonly />
+                                        <span class="input-group-text"> Lakhs</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+
+                    <!--------------------------------------------------------------->
+                    <div class="row mt-2">
+                        <div class="col-lg-12">
+                            <div class="row d-flex align-items-center">
+                                <div class="col-lg-3">
+                                    <label for="res_npv_capital_pipeline" class="form-label fw-bold">
+                                        Net present value of Capital Cost for Pipeline
+                                    </label>
+                                </div>
+                                <div class="col-lg-3">
+                                    <div class="input-group">
+                                        <input type="number" id="res_npv_capital_pipeline" class="form-control" readonly />
+                                        <span class="input-group-text"> Lakhs</span>
+                                    </div>
+                                </div>
+
+                                <div class="col-lg-3">
+                                    <label for="res_cost_pipeline_perRm" class="form-label fw-bold">Cost of Pipeline		</label>
+                                </div>
+                                <div class="col-lg-3">
+                                    <div class="input-group">
+                                        <input type="number" id="res_cost_pipeline_perRm" class="form-control" readonly />
+                                        <span class="input-group-text"> Rs/Rm</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <!--------------------------------------------------------------->
+                    <div class="row mt-2">
+                        <div class="col-lg-12">
+                            <div class="row d-flex align-items-center">
+                                <div class="col-lg-3">
+                                    <label for="res_npv_OM_pipeline" class="form-label fw-bold">
+                                        Net Present Value of O & M cost for Pipeline
+                                    </label>
+                                </div>
+                                <div class="col-lg-3">
+                                    <div class="input-group">
+                                        <input type="number" id="res_npv_OM_pipeline" class="form-control" readonly />
+                                        <span class="input-group-text"> Lakhs</span>
+                                    </div>
+                                </div>
+
+                                <div class="col-lg-3">
+                                    <label for="res_cost_pumpsets_after15" class="form-label fw-bold">
+                                        Cost of pumpsets after 15 years for replacement i.e this is the cost of pumps for second stage.
+                                    </label>
+                                </div>
+                                <div class="col-lg-3">
+                                    <div class="input-group">
+                                        <input type="number" id="res_cost_pumpsets_after15" class="form-control" readonly />
+                                        <span class="input-group-text"> Lakhs</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <!--------------------------------------------------------------->
+                    <div class="row mt-2">
+                        <div class="col-lg-12">
+                            <div class="row d-flex align-items-center">
+                                <div class="col-lg-3">
+                                    <label for="res_OM_pumpsets_year_stage1" class="form-label fw-bold">
+                                        O&M Cost for pumpsets per year for stage I
+                                    </label>
+                                </div>
+                                <div class="col-lg-3">
+                                    <div class="input-group">
+                                        <input type="number" id="res_OM_pumpsets_year_stage1" class="form-control" readonly />
+                                        <span class="input-group-text"> Lakhs</span>
+                                    </div>
+                                </div>
+
+                                <div class="col-lg-3">
+                                    <label for="res_OM_pumpsets_year_stage2" class="form-label fw-bold">
+                                        O&M Cost for pumpsets per year for stage II
+                                    </label>
+                                </div>
+                                <div class="col-lg-3">
+                                    <div class="input-group">
+                                        <input type="number" id="res_OM_pumpsets_year_stage2" class="form-control" readonly />
+                                        <span class="input-group-text"> Lakhs</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <!--------------------------------------------------------------->
+                    <div class="row mt-2">
+                        <div class="col-lg-12">
+                            <div class="row d-flex align-items-center">
+                                <div class="col-lg-3">
+                                    <label for="res_OM_pipeline_year_stage1" class="form-label fw-bold">
+                                        O&M Cost for pipeline per year for stage I
+                                    </label>
+                                </div>
+                                <div class="col-lg-3">
+                                    <div class="input-group">
+                                        <input type="number" id="res_OM_pipeline_year_stage1" class="form-control" readonly />
+                                        <span class="input-group-text"> Lakhs</span>
+                                    </div>
+                                </div>
+
+                                <div class="col-lg-3">
+                                    <label for="res_OM_pipeline_year_stage2" class="form-label fw-bold">
+                                        O&M Cost for pipeline per year for stage II
+                                    </label>
+                                </div>
+                                <div class="col-lg-3">
+                                    <div class="input-group">
+                                        <input type="number" id="res_OM_pipeline_year_stage2" class="form-control" readonly />
+                                        <span class="input-group-text"> Lakhs</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <!--------------------------------------------------------------->
+                    <div class="row mt-2">
+                        <div class="col-lg-12">
+                            <div class="row d-flex align-items-center">
+                                <div class="col-lg-3">
+                                    <label for="res_npv_capital_pumpsets_stage1" class="form-label fw-bold">
+                                        Net present value of Capital Cost for Pumpsets for Stage 1
+                                    </label>
+                                </div>
+                                <div class="col-lg-3">
+                                    <div class="input-group">
+                                        <input type="number" id="res_npv_capital_pumpsets_stage1" class="form-control" readonly />
+                                        <span class="input-group-text"> Lakhs</span>
+                                    </div>
+                                </div>
+
+                                <div class="col-lg-3">
+                                    <label for="res_npv_capital_pumpsets_stage2" class="form-label fw-bold">
+                                        Net present value of Capital Cost for Pumpsets for Stage 2
+                                    </label>
+                                </div>
+                                <div class="col-lg-3">
+                                    <div class="input-group">
+                                        <input type="number" id="res_npv_capital_pumpsets_stage2" class="form-control" readonly />
+                                        <span class="input-group-text"> Lakhs</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                        <!--------------------------------------------------------------->
+                        <div class="row mt-2">
+                            <div class="col-lg-12">
+                                <div class="row d-flex align-items-center">
+                                    <div class="col-lg-3">
+                                        
+                                    </div>
+                                    <div class="col-lg-3">
+                                        
+                                    </div>
+
+                                    <div class="col-lg-3">
+                                        <label for="res_replacement_cost_pumpsets_present_stage2" class="form-label fw-bold">
+                                            Replacement Cost of Pumpsets - Present Worth i.e for stage II
+                                        </label>
+                                    </div>
+                                    <div class="col-lg-3">
+                                        <div class="input-group">
+                                            <input type="number" id="res_replacement_cost_pumpsets_present_stage2" class="form-control" readonly />
+                                            <span class="input-group-text"> Lakhs</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            </div>
+                            <!--------------------------------------------------------------->
+                            <div class="row mt-2">
+                                <div class="col-lg-12">
+                                    <div class="row d-flex align-items-center">
+                                        <div class="col-lg-3">
+                                            <label for="res_npv_OM_pumpsets_stage1" class="form-label fw-bold">
+                                                Net Present Value of O & M cost for Pumpsets for Stage 1
+                                            </label>
+                                        </div>
+                                        <div class="col-lg-3">
+                                            <div class="input-group">
+                                                <input type="number" id="res_npv_OM_pumpsets_stage1" class="form-control" readonly />
+                                                <span class="input-group-text"> Lakhs</span>
+                                            </div>
+                                        </div>
+
+                                        <div class="col-lg-3">
+                                            <label for="res_npv_OM_pumpsets_stage2" class="form-label fw-bold">
+                                                Net Present Value of O & M cost for Pumpsets for Stage 2
+                                            </label>
+                                        </div>
+                                        <div class="col-lg-3">
+                                            <div class="input-group">
+                                                <input type="number" id="res_npv_OM_pumpsets_stage2" class="form-control" readonly />
+                                                <span class="input-group-text"> Lakhs</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                    </div>
+                                <!--------------------------------------------------------------->
+                                <div class="row mt-2">
+                                    <div class="col-lg-12">
+                                        <div class="row d-flex align-items-center">
+                                            <div class="col-lg-3">
+                                                <label for="res_npv_power_stage1" class="form-label fw-bold">
+                                                    Net Present value of Power cost for Stage 1
+                                                </label>
+                                            </div>
+                                            <div class="col-lg-3">
+                                                <div class="input-group">
+                                                    <input type="number" id="res_npv_power_stage1" class="form-control" readonly />
+                                                    <span class="input-group-text"> Lakhs</span>
+                                                </div>
+                                            </div>
+
+                                            <div class="col-lg-3">
+                                                <label for="res_npv_power_stage2" class="form-label fw-bold">
+                                                    Net Present value of Power cost for Stage 2
+                                                </label>
+                                            </div>
+                                            <div class="col-lg-3">
+                                                <div class="input-group">
+                                                    <input type="number" id="res_npv_power_stage2" class="form-control" readonly />
+                                                    <span class="input-group-text"> Lakhs</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                    <!--------------------------------------------------------------->
+                                    <div class="row mt-2">
+                                        <div class="col-lg-12">
+                                            <div class="row d-flex align-items-center">
+                                                <div class="col-lg-3">
+                                                    <label for="res_total_npv_stage1" class="form-label fw-bold">
+                                                        Total Net Present Value for Stage 1 (excluding pipe)
+                                                    </label>
+                                                </div>
+                                                <div class="col-lg-3">
+                                                    <div class="input-group">
+                                                        <input type="number" id="res_total_npv_stage1" class="form-control" readonly />
+                                                        <span class="input-group-text"> Lakhs</span>
+                                                    </div>
+                                                </div>
+
+                                                <div class="col-lg-3">
+                                                    <label for="res_total_npv_stage2" class="form-label fw-bold">
+                                                        Total Net Present Value for Stage 2 (excluding pipe)
+                                                    </label>
+                                                </div>
+                                                <div class="col-lg-3">
+                                                    <div class="input-group">
+                                                        <input type="number" id="res_total_npv_stage2" class="form-control" readonly />
+                                                        <span class="input-group-text"> Lakhs</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                        <!--------------------------------------------------------------->
+                                        <div class="row mt-2">
+                                            <div class="col-lg-12">
+                                                <div class="row d-flex align-items-center">
+                                                    <div class="col-lg-3">
+                                                        <label for="res_net_total_power_cost" class="form-label fw-bold">
+                                                            Net total power cost
+                                                        </label>
+                                                    </div>
+                                                    <div class="col-lg-3">
+                                                        <div class="input-group">
+                                                            <input type="number" id="res_net_total_power_cost" class="form-control" readonly />
+                                                            <span class="input-group.text"> Lakhs</span>
+                                                        </div>
+                                                    </div>
+
+                                                    <div class="col-lg-3">
+                                                        <label for="res_total_npv_all" class="form-label fw-bold">
+                                                            Total Net Present Value
+                                                        </label>
+                                                    </div>
+                                                    <div class="col-lg-3">
+                                                        <div class="input-group">
+                                                            <input type="number" id="res_total_npv_all" class="form-control" readonly />
+                                                            <span class="input-group-text"> Lakhs</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                    </form-box>
+
+
+                    <div class="row mt-2 justify-content-center">
+                        <div class="col-auto text-center">
+                            <button type="submit" onclick="addResult()" class="btn btn-action" id="result_button" disabled>ADD THE RESULT</button>
+                            <p class="text-primary">(User to Click the "Add the result" button to add the calculated results in a tabular format.Repeat this step until you have sufficient numbers of diameter values to find the Optimum Diameter)</p>
+                        </div>
+                    </div>
+
+
+
+                    <div class="row mt-2">
+                        <div class="col-lg-12 ">
+                            <div class="row d-flex align-items-center">
+                                <div class="col-lg-6 d-flex flex-column align-items-center ">
+                                    <button class="btn btn-action" onclick="refreshButton()" id="refresh_button" disabled>REFRESH</button>
+                                    <p class="text-primary">(User to click Refresh button to select another diameter from the input data section)</p>
+                                </div>
+
+                                <div class="col-lg-6 d-flex flex-column align-items-center ">
+                                    <button class="btn btn-action" id="continue_button" onclick="continueButton()" disabled>CONTINUE</button>
+                                    <p class="text-primary">(User to click Continue button to go for optimum diameter calculation)</p>
+                                </div>
+
+                            </div>
+                        </div>
+                    </div>
+
+                    @* Tables *@
+                    <div class="" id="three_tables">
+                        <sub-frame title="INPUT/OUTPUT">
+
+                            @* table1 *@
+                            <form-box>
+                                <div class="table-responsive">
+                                    <table class="table table-bordered text-center">
+
+                                        <thead class="bg-secondary text-white">
+                                            <tr>
+                                                <th>Flow for stage 1</th>
+                                                <th>Flow for stage 2</th>
+                                                <th>Pumping hours</th>
+                                                <th>Peak flow hours per day</th>
+                                                <th>population for stage 1</th>
+                                                <th>population for stage 2</th>
+                                                <th>peak factor for stage 1</th>
+                                                <th>peak factor for stage 2</th>
+                                                <th>Length of Pumping Main</th>
+                                                <th>Discharge Point Elevation</th>
+                                                <th>Low water level at source</th>
+                                                <th>Residual Head</th>
+                                                <th>Station Losses</th>
+                                                <th>Power Tariff</th>
+                                                <th>Escalation of Power Tariff</th>
+                                                <th>Escalated rate</th>
+                                                <th>Annual Intrest Rate</th>
+                                                <th>Material Considered</th>
+                                                <th>Nos of year to be considered (Design Period)</th>
+                                                <th>Life of Pipeline</th>
+                                                <th>Life of the pumpsets</th>
+                                                <th>Pump Efficiency</th>
+                                                <th>Motor Efficiency</th>
+                                                <th>Cost of Pumpsets</th>
+                                                <th>O & M cost factor for pumpset per year</th>
+                                                <th>O & M cost factor for pipeline per year</th>
+                                                <th>Hazen Williams Coefficient</th>
+                                                <th>Material Unit Rate</th>
+                                                <th>Wall Thickness of Pipe</th>
+                                                <th>Bulk Modulus of Water</th>
+                                                <th>Modulus of Elasticity of Pipe Material</th>
+                                                <th>Allowable Withstanding Pressure of Selected Pipe</th>
+                                                <th>Proposed Standby</th>
+                                            </tr>
+                                        </thead>
+
+                                        <tbody>
+                                            <tr>
+                                                <td id="row1"></td>
+                                                <td id="row2"></td>
+                                                <td id="row3"></td>
+                                                <td id="row4"></td>
+                                                <td id="row5"></td>
+                                                <td id="row6"></td>
+                                                <td id="row7"></td>
+                                                <td id="row8"></td>
+                                                <td id="row9"></td>
+                                                <td id="row10"></td>
+                                                <td id="row11"></td>
+                                                <td id="row12"></td>
+                                                <td id="row13"></td>
+                                                <td id="row14"></td>
+                                                <td id="row15"></td>
+                                                <td id="row16"></td>
+                                                <td id="row17"></td>
+                                                <td id="row18"></td>
+                                                <td id="row19"></td>
+                                                <td id="row20"></td>
+                                                <td id="row21"></td>
+                                                <td id="row22"></td>
+                                                <td id="row23"></td>
+                                                <td id="row24"></td>
+                                                <td id="row25"></td>
+                                                <td id="row26"></td>
+                                                <td id="row27"></td>
+                                                <td id="row28"></td>
+                                                <td id="row29"></td>
+                                                <td id="row30"></td>
+                                                <td id="row31"></td>
+                                                <td id="row32"></td>
+                                                <td id="row33"></td>
+                                            </tr>
+                                        </tbody>
+
+                                    </table>
+                                </div>
+                            </form-box>
+
+
+                            @* table2 *@
+                            <form-box>
+                                <div class="table-responsive">
+                                    <table class="table table-bordered text-center">
+                                        <thead class="bg-secondary text-white">
+                                            <tr>
+                                                <th>Average Hourly Flow for Stage II	</th>
+                                                <th>Total Flow in Peak Flow Hours for Stage II	</th>
+                                                <th>Hourly Peak Flow for Stage II	</th>
+                                                <th>Balance Flow during Non Peak Flow Hours for Stage II	</th>
+                                                <th>Non Peak Flow Hourly demand for Stage II	</th>
+                                                <th>Actual velocity_StageII	</th>
+                                                <th>Pipe Friction Loss for Stage II during Peak Flow	</th>
+                                                <th>Pipe Friction Loss for Stage II during Non Peak Flow	</th>
+                                                <th>Total Pump Head for Stage II during Peak Flow	</th>
+                                                <th>Total Pump Head for Stage II during Non Peak Flow	</th>
+                                                <th>Pump kW for Stage II during Peak flow	</th>
+                                                <th>Pump kW for Stage II during Non Peak Flow	</th>
+                                                <th>Water Hammer Head for Stage II	</th>
+                                                <th>Capital cost of pumpsets_StageII	</th>
+                                                <th>Power Required in One Year for Stage II during Peak Flow	</th>
+                                                <th>Power Required in One Year for Stage II during Non Peak Flow	</th>
+                                                <th>Total Power Required in One Year for Stage II	</th>
+                                                <th>Power cost for Stage II per year	</th>
+                                                <th>Cost of pumpsets after 15 years for replacement	</th>
+                                                <th>O&M Cost for pumpsets per year for Stage II	</th>
+                                                <th>O&M Cost for Pipeline per year for Stage II	</th>
+                                                <th>Replacement Cost of Pumpsets - Present Worth i.e for stage II	</th>
+                                                <th>Net present value of Capital Cost for Pumpsets_StageII	</th>
+                                                <th>Net Present value of Power cost_StageII	</th>
+                                                <th>Net Present Value of O & M cost for Pumpsets_StageII	</th>
+                                                <th>Total Net Present Value_StageII(Excluding Pipe)	</th>
+                                                <th>Total Net Present Value</th>
+                                            </tr>
+                                        </thead>
+
+                                        <tbody>
+                                            <tr>
+                                                <td id="cell1"></td>
+                                                <td id="cell2"></td>
+                                                <td id="cell3"></td>
+                                                <td id="cell4"></td>
+                                                <td id="cell5"></td>
+                                                <td id="cell6"></td>
+                                                <td id="cell7"></td>
+                                                <td id="cell8"></td>
+                                                <td id="cell9"></td>
+                                                <td id="cell10"></td>
+                                                <td id="cell11"></td>
+                                                <td id="cell12"></td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </form-box>
+
+
+                            @* table3 *@
+                            <form-box>
+                                <div class="table-responsive">
+                                    <table class="table table-bordered text-center">
+                                        <thead class="bg-secondary text-white">
+                                            <tr>
+                                                <th>Diameter	</th>
+                                                <th>Inner Diameter		</th>
+                                                <th>Average Hourly Flow for Stage I		</th>
+                                                <th>Total Flow in Peak Flow Hours for Stage I		</th>
+                                                <th>Hourly Peak Flow for Stage I		</th>
+                                                <th>Balance Flow during Non Peak Flow Hours for Stage I		</th>
+                                                <th>Non Peak Flow Hourly demand for Stage I		</th>
+                                                <th>Actual velocity_StageI		</th>
+                                                <th>Pipe Friction Loss for Stage I during Peak Flow		</th>
+                                                <th>Pipe Friction Loss for Stage I during Non Peak Flow		</th>
+                                                <th>Total Pump Head for Stage I during Peak Flow		</th>
+                                                <th>Total Pump Head for Stage I during Non Peak Flow		</th>
+                                                <th>Pump kW for Stage I during Peak flow		</th>
+                                                <th>Pump kW for Stage I during Non Peak Flow		</th>
+                                                <th>Water Hammer Head for Stage I		</th>
+                                                <th>Capital Cost of Pumpsets for Stage I		</th>
+                                                <th>X factor		</th>
+                                                <th>Power Required in One Year for Stage I during Peak Flow		</th>
+                                                <th>Power Required in One Year for Stage I during Non Peak Flow		</th>
+                                                <th>Total Power Required in One Year for Stage I		</th>
+                                                <th>Power cost for Stage I per year		</th>
+                                                <th>O&M Cost for pumpsets per year for Stage I		</th>
+                                                <th>O&M Cost for Pipeline per year for Stage I		</th>
+                                                <th>Net present value of Capital Cost for Pipeline_StageI		</th>
+                                                <th>Net Present Value of O & M cost for Pipeline_StageI		</th>
+                                                <th>Net present value of Capital Cost for Pumpsets_StageI		</th>
+                                                <th>Net Present Value of O & M cost for Pumpsets_StageI		</th>
+                                                <th>Net Present value of Power cost_StageI		</th>
+                                                <th>
+                                                    Total Net Present Value for Stage I (Excluding Pipe)
+                                                </th>
+
+                                            </tr>
+                                        </thead>
+
+                                        <tbody>
+                                            <tr>
+                                                <td id="line1"></td>
+                                                <td id="line2"></td>
+                                                <td id="line3"></td>
+                                                <td id="line4"></td>
+                                                <td id="line5"></td>
+                                                <td id="line6"></td>
+                                                <td id="line7"></td>
+                                                <td id="line8"></td>
+                                                <td id="line9"></td>
+                                                <td id="line10"></td>
+                                                <td id="line11"></td>
+                                                <td id="line12"></td>
+                                                <td id="line13"></td>
+                                                <td id="line14"></td>
+                                                <td id="line15"></td>
+                                                <td id="line16"></td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </form-box>
+
+                            </sub-frame>
+                            </div>
+                                   <!-- row 36 -->
+        <div class="row mt-2">
+            <div class="col-lg-6 ">
+                <div class="row d-flex align-items-center">
+                    <div class="col-lg-6">
+                        <button class="btn btn-primary" id="optimum_diameter_button" onclick="optimumDiameter()" disabled>OPTIMUM DIAMETER</button>
+                        <p class="text-primary"> (Click the button to view the optimum diameter)</p>
+                    </div>
+                    <div class="col-lg-6">
+                        <div class="input-group">
+                            <input type="text" id="txtdia_opt" class="form-control" readonly />
+                            <span class="input-group-text">m</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        @* hidden inputs *@
+        <div class="d-none">
+            <input type="number" id="TextBox50" />
+            <input type="number" id="TextBox51" />
+            <input type="number" id="TextBox52" />
+            <input type="number" id="TextBox53" />
+            <input type="number" id="TextBox16_hidden" value="1.8" step="0.1" />
+            <input type="number" id="TextBox17_hidden" value="1.8" step="0.6" />
+            <input type="number" id="TextBox54" />
+            <input type="number" id="TextBox55" />
+            <input type="number" id="TextBox39_hidden" />
+        </div>
+
+
+
+    </sub-frame>
+
+
+   <div class="row mt-3 d-flex justify-content-center" id="General_Input_and_Feedback">
+        <div class="col-lg-4 d-flex justify-content-center">
+            <button class="btn btn-action" id="detailed_results" onclick="outPutPanel()" disabled>DETAILED RESULTS</button>
+        </div>
+    </div>
+
+</main-frame>
+
+
