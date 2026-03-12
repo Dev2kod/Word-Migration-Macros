@@ -1,0 +1,326 @@
+<main-frame title="Development of Rainfall Intensity Duration Frequency (R- IDF)Curves by Bell Method for Arid Regions">
+    <div class="row needs-validation" novalidate>
+        <div class="col-lg-12">
+            <sub-frame title="USER INPUT DATA -TECHNICAL">
+                <div class="row">
+                    <div class="col-lg-2">
+                        <label for="ddl_yearsCount" class="form-label fw-bold">Enter no. of Years of available rainfall data</label>
+                    </div>
+                    <div class="col-lg-3">
+                        <select id="ddl_yearsCount" class="form-select" required>
+                            <option value="">Select</option>
+                            <option>10</option>
+                            <option>11</option>
+                            <option>12</option>
+                            <option>13</option>
+                            <option>14</option>
+                            <option>15</option>
+                            <option>16</option>
+                            <option>17</option>
+                            <option>18</option>
+                            <option>19</option>
+                            <option>20</option>
+                            <option>21</option>
+                            <option>22</option>
+                            <option>23</option>
+                            <option>24</option>
+                            <option>25</option>
+                            <option>26</option>
+                            <option>27</option>
+                            <option>28</option>
+                            <option>29</option>
+                            <option>30</option>
+                        </select>
+                    </div>
+                    <div class="col-lg-2">
+                        <label for="txt_startYear" class="form-label fw-bold">Enter Start Year of Rainfall Data</label>
+                    </div>
+                    <div class="col-lg-3">
+                        <input id="txt_startYear" type="number" class="form-control" placeholder="2020" />
+                    </div>
+                </div>
+
+                <div class="row bg-secondary text-white mt-2">
+                    <div class="col-md-3 tce-col-header">Year</div>
+                    <div class="col-md-3 tce-col-header">Annual Rainfall</div>
+                    <div class="col-md-3 tce-col-header">Rainy Days</div>
+                    <div class="col-md-3 tce-col-header">Max 24-hr Rain (mm/day)</div>
+                </div>
+
+                <div id="rainfallRows"></div>
+
+                <div class="row mt-3 d-flex justify-content-center">
+                    <div class="col-lg-4 d-flex justify-content-center">
+                        <button id="btn_next" type="button" class="btn btn-action">Next</button>
+
+                    </div>
+                </div>
+            </sub-frame>
+
+            <sub-frame title="OUTPUT RESULTS">
+                <div class="col-lg-12">
+                    <label class="form-label fw-bold">IDF curve using Bells formula</label><br />
+                    <img src="~/Images/WasteWater/orderedList77.png" class="mb-2" style="width:320px;" /><br />
+
+                    <label>
+                        P 30 60 is the one hour rainfall in millimeters for a 10-year return period =
+                        <span id="p_30_60_value"></span>
+                    </label><br />
+
+                    <label>
+                        M is the mean of the maximum annual observed one day rainfall in millimeters =
+                        <span id="m_value"></span>
+                    </label><br />
+
+                    <label>
+                        N is the mean annual number of rainfall days (1 &lt; N &lt; 80) =
+                        <span id="n_value"></span>
+                    </label><br />
+                </div>
+                <br />
+                @*------------------ tables ----------------------------*@
+                <div>
+                    <table class="table table-bordered">
+                        <thead class="bg-secondary text-white">
+                            <tr>
+                                <!-- Left header cell spans 3 rows -->
+                                <td rowspan="3" style="text-align:center; vertical-align:middle;" class=" tce-col-header tce-grid-border">Frequency of Storm in a Year<br>(T in years)</td>
+                                <td colspan="10" class="tce-col-header tce-grid-border">Depth of Rainfall (mm)</td>
+                            </tr>
+                            <tr>
+                                <td colspan="10" class="tce-col-header tce-grid-border">Duration in Minutes (tc)</td>
+                            </tr>
+                            <tr>
+                                <td class="tce-grid-border">5</td>
+                                <td class="tce-grid-border">10</td>
+                                <td class="tce-grid-border">15</td>
+                                <td class="tce-grid-border">30</td>
+                                <td class="tce-grid-border">45</td>
+                                <td class="tce-grid-border">60</td>
+                                <td class="tce-grid-border">90</td>
+                                <td class="tce-grid-border">120</td>
+                                <td class="tce-grid-border">150</td>
+                                <td class="tce-grid-border">180</td>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td class="tce-grid-border">2</td>
+                                <td class="tce-grid-border" id="g_i_2_5">Calculated</td>
+                                <td class="tce-grid-border" id="g_i_2_10">Calculated</td>
+                                <td class="tce-grid-border" id="g_i_2_15">Calculated</td>
+                                <td class="tce-grid-border" id="g_i_2_30">Calculated</td>
+                                <td class="tce-grid-border" id="g_i_2_45">Calculated</td>
+                                <td class="tce-grid-border" id="g_i_2_60">Calculated</td>
+                                <td class="tce-grid-border" id="g_i_2_90">Calculated</td>
+                                <td class="tce-grid-border" id="g_i_2_120">Calculated</td>
+                                <td class="tce-grid-border" id="g_i_2_150">Calculated</td>
+                                <td class="tce-grid-border" id="g_i_2_180">Calculated</td>
+                            </tr>
+                            <tr>
+                                <td class="tce-grid-border">5</td>
+                                <td class="tce-grid-border" id="g_i_5_5">Calculated</td>
+                                <td class="tce-grid-border" id="g_i_5_10">Calculated</td>
+                                <td class="tce-grid-border" id="g_i_5_15">Calculated</td>
+                                <td class="tce-grid-border" id="g_i_5_30">Calculated</td>
+                                <td class="tce-grid-border" id="g_i_5_45">Calculated</td>
+                                <td class="tce-grid-border" id="g_i_5_60">Calculated</td>
+                                <td class="tce-grid-border" id="g_i_5_90">Calculated</td>
+                                <td class="tce-grid-border" id="g_i_5_120">Calculated</td>
+                                <td class="tce-grid-border" id="g_i_5_150">Calculated</td>
+                                <td class="tce-grid-border" id="g_i_5_180">Calculated</td>
+                            </tr>
+                            <tr>
+                                <td class="tce-grid-border">10</td>
+                                <td class="tce-grid-border" id="g_i_10_5">Calculated</td>
+                                <td class="tce-grid-border" id="g_i_10_10">Calculated</td>
+                                <td class="tce-grid-border" id="g_i_10_15">Calculated</td>
+                                <td class="tce-grid-border" id="g_i_10_30">Calculated</td>
+                                <td class="tce-grid-border" id="g_i_10_45">Calculated</td>
+                                <td class="tce-grid-border" id="g_i_10_60">Calculated</td>
+                                <td class="tce-grid-border" id="g_i_10_90">Calculated</td>
+                                <td class="tce-grid-border" id="g_i_10_120">Calculated</td>
+                                <td class="tce-grid-border" id="g_i_10_150">Calculated</td>
+                                <td class="tce-grid-border" id="g_i_10_180">Calculated</td>
+                            </tr>
+                            <tr>
+                                <td class="tce-grid-border">25</td>
+                                <td class="tce-grid-border" id="g_i_25_5">Calculated</td>
+                                <td class="tce-grid-border" id="g_i_25_10">Calculated</td>
+                                <td class="tce-grid-border" id="g_i_25_15">Calculated</td>
+                                <td class="tce-grid-border" id="g_i_25_30">Calculated</td>
+                                <td class="tce-grid-border" id="g_i_25_45">Calculated</td>
+                                <td class="tce-grid-border" id="g_i_25_60">Calculated</td>
+                                <td class="tce-grid-border" id="g_i_25_90">Calculated</td>
+                                <td class="tce-grid-border" id="g_i_25_120">Calculated</td>
+                                <td class="tce-grid-border" id="g_i_25_150">Calculated</td>
+                                <td class="tce-grid-border" id="g_i_25_180">Calculated</td>
+                            </tr>
+                            <tr>
+                                <td class="tce-grid-border">50</td>
+                                <td class="tce-grid-border" id="g_i_50_5">Calculated</td>
+                                <td class="tce-grid-border" id="g_i_50_10">Calculated</td>
+                                <td class="tce-grid-border" id="g_i_50_15">Calculated</td>
+                                <td class="tce-grid-border" id="g_i_50_30">Calculated</td>
+                                <td class="tce-grid-border" id="g_i_50_45">Calculated</td>
+                                <td class="tce-grid-border" id="g_i_50_60">Calculated</td>
+                                <td class="tce-grid-border" id="g_i_50_90">Calculated</td>
+                                <td class="tce-grid-border" id="g_i_50_120">Calculated</td>
+                                <td class="tce-grid-border" id="g_i_50_150">Calculated</td>
+                                <td class="tce-grid-border" id="g_i_50_180">Calculated</td>
+                            </tr>
+                            <tr>
+                                <td class="tce-grid-border">100</td>
+                                <td class="tce-grid-border" id="g_i_100_5">Calculated</td>
+                                <td class="tce-grid-border" id="g_i_100_10">Calculated</td>
+                                <td class="tce-grid-border" id="g_i_100_15">Calculated</td>
+                                <td class="tce-grid-border" id="g_i_100_30">Calculated</td>
+                                <td class="tce-grid-border" id="g_i_100_45">Calculated</td>
+                                <td class="tce-grid-border" id="g_i_100_60">Calculated</td>
+                                <td class="tce-grid-border" id="g_i_100_90">Calculated</td>
+                                <td class="tce-grid-border" id="g_i_100_120">Calculated</td>
+                                <td class="tce-grid-border" id="g_i_100_150">Calculated</td>
+                                <td class="tce-grid-border" id="g_i_100_180">Calculated</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+
+                </div>
+
+
+                <div>
+                    <table class="table table-bordered">
+                        <thead class="bg-secondary text-white">
+                            <tr>
+                                <!-- Left header cell spans 3 rows -->
+                                <td rowspan="3" style="text-align:center; vertical-align:middle;" class="tce-col-header tce-grid-border">
+                                    Frequency of Storm in a Year<br>(T in years)
+                                </td>
+                                <td colspan="10" class="tce-col-header tce-grid-border">Rainfall Intensity (mm/hr)</td>
+                            </tr>
+                            <tr>
+                                <td colspan="10" class="tce-col-header tce-grid-border">Duration in Minutes (tc)</td>
+                            </tr>
+                            <tr>
+                                <td class="tce-col-header tce-grid-border">5</td>
+                                <td class="tce-col-header tce-grid-border">10</td>
+                                <td class="tce-col-header tce-grid-border">15</td>
+                                <td class="tce-col-header tce-grid-border">30</td>
+                                <td class="tce-col-header tce-grid-border">45</td>
+                                <td class="tce-col-header tce-grid-border">60</td>
+                                <td class="tce-col-header tce-grid-border">90</td>
+                                <td class="tce-col-header tce-grid-border">120</td>
+                                <td class="tce-col-header tce-grid-border">150</td>
+                                <td class="tce-col-header tce-grid-border">180</td>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td class="tce-grid-border">2</td>
+                                <td class="tce-grid-border" id="g_int_2_5">Calculated</td>
+                                <td class="tce-grid-border" id="g_int_2_10">Calculated</td>
+                                <td class="tce-grid-border" id="g_int_2_15">Calculated</td>
+                                <td class="tce-grid-border" id="g_int_2_30">Calculated</td>
+                                <td class="tce-grid-border" id="g_int_2_45">Calculated</td>
+                                <td class="tce-grid-border" id="g_int_2_60">Calculated</td>
+                                <td class="tce-grid-border" id="g_int_2_90">Calculated</td>
+                                <td class="tce-grid-border" id="g_int_2_120">Calculated</td>
+                                <td class="tce-grid-border" id="g_int_2_150">Calculated</td>
+                                <td class="tce-grid-border" id="g_int_2_180">Calculated</td>
+                            </tr>
+                            <tr>
+                                <td class="tce-grid-border">5</td>
+                                <td class="tce-grid-border" id="g_int_5_5">Calculated</td>
+                                <td class="tce-grid-border" id="g_int_5_10">Calculated</td>
+                                <td class="tce-grid-border" id="g_int_5_15">Calculated</td>
+                                <td class="tce-grid-border" id="g_int_5_30">Calculated</td>
+                                <td class="tce-grid-border" id="g_int_5_45">Calculated</td>
+                                <td class="tce-grid-border" id="g_int_5_60">Calculated</td>
+                                <td class="tce-grid-border" id="g_int_5_90">Calculated</td>
+                                <td class="tce-grid-border" id="g_int_5_120">Calculated</td>
+                                <td class="tce-grid-border" id="g_int_5_150">Calculated</td>
+                                <td class="tce-grid-border" id="g_int_5_180">Calculated</td>
+                            </tr>
+                            <tr>
+                                <td class="tce-grid-border">10</td>
+                                <td class="tce-grid-border" id="g_int_10_5">Calculated</td>
+                                <td class="tce-grid-border" id="g_int_10_10">Calculated</td>
+                                <td class="tce-grid-border" id="g_int_10_15">Calculated</td>
+                                <td class="tce-grid-border" id="g_int_10_30">Calculated</td>
+                                <td class="tce-grid-border" id="g_int_10_45">Calculated</td>
+                                <td class="tce-grid-border" id="g_int_10_60">Calculated</td>
+                                <td class="tce-grid-border" id="g_int_10_90">Calculated</td>
+                                <td class="tce-grid-border" id="g_int_10_120">Calculated</td>
+                                <td class="tce-grid-border" id="g_int_10_150">Calculated</td>
+                                <td class="tce-grid-border" id="g_int_10_180">Calculated</td>
+                            </tr>
+                            <tr>
+                                <td class="tce-grid-border">25</td>
+                                <td class="tce-grid-border" id="g_int_25_5">Calculated</td>
+                                <td class="tce-grid-border" id="g_int_25_10">Calculated</td>
+                                <td class="tce-grid-border" id="g_int_25_15">Calculated</td>
+                                <td class="tce-grid-border" id="g_int_25_30">Calculated</td>
+                                <td class="tce-grid-border" id="g_int_25_45">Calculated</td>
+                                <td class="tce-grid-border" id="g_int_25_60">Calculated</td>
+                                <td class="tce-grid-border" id="g_int_25_90">Calculated</td>
+                                <td class="tce-grid-border" id="g_int_25_120">Calculated</td>
+                                <td class="tce-grid-border" id="g_int_25_150">Calculated</td>
+                                <td class="tce-grid-border" id="g_int_25_180">Calculated</td>
+                            </tr>
+                            <tr>
+                                <td class="tce-grid-border">50</td>
+                                <td class="tce-grid-border" id="g_int_50_5">Calculated</td>
+                                <td class="tce-grid-border" id="g_int_50_10">Calculated</td>
+                                <td class="tce-grid-border" id="g_int_50_15">Calculated</td>
+                                <td class="tce-grid-border" id="g_int_50_30">Calculated</td>
+                                <td class="tce-grid-border" id="g_int_50_45">Calculated</td>
+                                <td class="tce-grid-border" id="g_int_50_60">Calculated</td>
+                                <td class="tce-grid-border" id="g_int_50_90">Calculated</td>
+                                <td class="tce-grid-border" id="g_int_50_120">Calculated</td>
+                                <td class="tce-grid-border" id="g_int_50_150">Calculated</td>
+                                <td class="tce-grid-border" id="g_int_50_180">Calculated</td>
+                            </tr>
+                            <tr>
+                                <td class="tce-grid-border">100</td>
+                                <td class="tce-grid-border" id="g_int_100_5">Calculated</td>
+                                <td class="tce-grid-border" id="g_int_100_10">Calculated</td>
+                                <td class="tce-grid-border" id="g_int_100_15">Calculated</td>
+                                <td class="tce-grid-border" id="g_int_100_30">Calculated</td>
+                                <td class="tce-grid-border" id="g_int_100_45">Calculated</td>
+                                <td class="tce-grid-border" id="g_int_100_60">Calculated</td>
+                                <td class="tce-grid-border" id="g_int_100_90">Calculated</td>
+                                <td class="tce-grid-border" id="g_int_100_120">Calculated</td>
+                                <td class="tce-grid-border" id="g_int_100_150">Calculated</td>
+                                <td class="tce-grid-border" id="g_int_100_180">Calculated</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div id="chart-idfbell" class="echart" style="height:420px;"></div>
+                <div class="row mt-3 d-flex justify-content-center">
+                    <div class="col-lg-4 d-flex justify-content-center">
+                        <button class="btn btn-action" onclick="outPutPanel()">General Input and Feedback</button>
+                    </div>
+                </div>
+            </sub-frame>
+        </div>
+    </div>
+
+    <partial name="_Feedback" view-data='new ViewDataDictionary(ViewData) { { "ContentStyle", "Style7" }, { "IsHidden", true } }' />
+</main-frame>
+<partial name="_ModalWindow" />
+
+<!-- Include visualization and export libraries (CDN) -->
+<script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script>
+    // ensure global jsPDF constructor exists for older code references
+    if (window.jspdf && !window.jsPDF) window.jsPDF = window.jspdf.jsPDF;
+</script>
+
+<script src="~/js/WasteWater/IDFCurvesBell.js"></script>
+
+

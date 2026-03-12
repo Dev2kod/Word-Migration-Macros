@@ -1,4 +1,4 @@
-// Global variables
+// global variables
 let flow1, standby, flow2, phour, l_pmain, dis_elv, low_level, res_head, stn_loss, pow_tariff, esc_pow_tariff, ann_rate, esc_ann_rate;
 let m, n, n1, n2, l_pipe, l_pump, vmax, vmin, pump_eff, motor_eff, cost_pump, omfac_pipe, omfac_pump, flow_total, dmax, dmin;
 let flowphr1, flowphr2, flowps1, flowps2, d = 0, vel_act, unit_rate = 0, cost_pipeline, loss_friction, loss_minor, st_head, pump_head, pump_kw;
@@ -10,7 +10,7 @@ let avg_flowphr1, avg_flowphr2, peak_flowphr1, peak_flowphr2, balflw1, balflw2;
 let peak_flow1, peak_flow2, nonpeak_hrflw1, nonpeak_hrflw2, nonpeak_tme, loss_frictionpk, loss_frictionpk2, loss_minor1peak, loss_minor2peak, pump_headpk, pump_headpk2, pump_kwpk, pump_kwpk2, tot_pumpkw1, tot_pumpkw2;
 let pow_pkpy1, pow_pkpy2, pow_nonpk1, pow_nonpk2, life_stage1plusstage2, stag2_year;
 
-// Function to get element value as number (works for inputs and selects)
+// helper functions
 function getValue(id) {
     const el = document.getElementById(id);
     if (!el) return 0;
@@ -20,25 +20,21 @@ function getValue(id) {
     return parseFloat(el.value) || 0;
 }
 
-// Function to set element value
 function setValue(id, value) {
     const el = document.getElementById(id);
     if (el) el.value = value;
 }
 
-// Function to show/hide elements
 function showElement(id, show) {
     const el = document.getElementById(id);
     if (el) el.classList.toggle('d-none', !show);
 }
 
-// Dropdown change handler
+// material selection handler
 document.getElementById('ddlm').addEventListener('change', function () {
     const selected = this.value;
-    // Hide all panels
     ['paneld1', 'paneld2', 'paneld3', 'paneld4', 'paneld5', 'paneld6'].forEach(id => showElement(id, false));
 
-    // Set C value and show appropriate panel based on material
     let cValue = 0;
     let dropdownId = '';
 
@@ -76,44 +72,32 @@ document.getElementById('ddlm').addEventListener('change', function () {
     }
 
     setValue('TextBox28', cValue);
-    // Update d and txt_di with current selected diameter
-    if (dropdownId) {
-        d = getValue(dropdownId);
-        setValue('txt_di', d);
-    }
+    setValue('txt_di', '');
 
-    // Enable button4 if both material and class of pipe are selected
     checkButton4Enable();
 });
 
-// Add event listeners for diameter dropdowns
 ['ddld1', 'ddld2', 'ddld3', 'ddld4', 'ddld5', 'ddld6'].forEach(id => {
     document.getElementById(id).addEventListener('change', function () {
         d = parseFloat(this.value);
-        setValue('txt_di', d);
     });
 });
 
-// Function to check if button4 should be enabled
 function checkButton4Enable() {
-    // allow operation even if class not selected; user can override via form values
     document.getElementById('button4').disabled = false;
 }
 
-// Add event listener for class of pipe
 const txtBox20 = document.getElementById('TextBox20');
 if (txtBox20) {
     txtBox20.addEventListener('input', checkButton4Enable);
 }
 
-// Button 4 click (MAX & MIN DIAMETER)
+// Button 4 (max & min diameter)
 function buttonFourClick() {
-    // reset following button workflow for new diameter cycle
     const resBtn = document.getElementById('result_button'); if (resBtn) resBtn.disabled = true;
     const contBtn = document.getElementById('continue_button'); if (contBtn) contBtn.disabled = true;
     const optBtn = document.getElementById('optimum_diameter_button'); if (optBtn) optBtn.disabled = true;
 
-    // Peak factor calculation
     pump_tme = getValue('TextBox5');
     peak_tme = getValue('TextBox7');
     non_peaktme = pump_tme - peak_tme;
@@ -133,7 +117,6 @@ function buttonFourClick() {
     }
     setValue('TextBox9', pf1);
 
-    // For stage 2
     pop2 = getValue('TextBox2');
     if (pop2 < 10000) {
         pf2 = 5 / Math.pow((pop2 / 1000), 0.2);
@@ -148,7 +131,6 @@ function buttonFourClick() {
     }
     setValue('TextBox10', pf2);
 
-    // Calculations
     flow1 = getValue('TextBox3');
     flow2 = getValue('TextBox4');
     phour = getValue('TextBox5');
@@ -177,7 +159,6 @@ function buttonFourClick() {
     peak_flowps1 = avg_flowps1 * pkfac_1;
     peak_flowps2 = avg_flowps2 * pkfac_2;
 
-    // For dmax and dmin use peak flow of stage2
     dmax = Math.sqrt(4 * peak_flowps2 / (Math.PI * 1.2)) * 1000;
     dmin = Math.sqrt(4 * peak_flowps2 / (Math.PI * 3)) * 1000;
 
@@ -195,27 +176,23 @@ function buttonFourClick() {
     setValue('TextBox38', Math.round(nonpeak_hrflw1 * 100) / 100);
     setValue('TextBox39', Math.round(nonpeak_hrflw2 * 100) / 100);
 
-    // Enable next button
     document.getElementById('button5').disabled = false;
 }
 
-// Button 5 click (WATER HAMMER CHECK)
+// Button 5 (water hammer check)
 function buttonFiveClick() {
-    // Water hammer calculations
     id = getValue('txt_di');
     tw = getValue('txt_tw');
     k = getValue('txt_k');
     E = getValue('txt_E');
     pr1 = getValue('txt_pr1');
 
-    // Peak flow velocities
     vel_act = peak_flowps1 / (0.7854 * Math.pow((id / 1000), 2));
     vel_act2 = peak_flowps2 / (0.7854 * Math.pow((id / 1000), 2));
 
     w_hammer1 = (vel_act / 9.81) * (1425 / Math.sqrt(1 + ((k * (id / 1000)) / (E * (tw / 1000)))));
     w_hammer2 = (vel_act2 / 9.81) * (1425 / Math.sqrt(1 + ((k * (id / 1000)) / (E * (tw / 1000)))));
 
-    // Check against allowable pressure
     if (w_hammer1 > pr1) {
         showElement('Label1', true);
         showElement('Label2', false);
@@ -244,17 +221,14 @@ function buttonFiveClick() {
         showElement('Label6', true);
     }
 
-    // transition control states
     document.getElementById('button_calc').disabled = false;
     document.getElementById('button5').disabled = true;
 
-    // disable ensure phase prior to recalc
     document.getElementById('button4').disabled = false;
 }
 
 // Button calculate click
 function buttonCalcClick() {
-    // Assign variables
     flow1 = getValue('TextBox3');
     flow2 = getValue('TextBox4');
     phour = getValue('TextBox5');
@@ -289,153 +263,112 @@ function buttonCalcClick() {
     k = getValue('txt_k');
     E = getValue('txt_E');
 
-    // Hourly average flow
     avg_flowphr1 = (flow1 * 1000) / phour;
     avg_flowphr2 = (flow2 * 1000) / phour;
 
-    // Average flow per second in m3/s
     avg_flowps1 = (flow1 * 1000) / (phour * 3600);
     avg_flowps2 = (flow2 * 1000) / (phour * 3600);
 
-    // Hourly peak flow in m3/hr
     peak_flowphr1 = (avg_flowphr1 * pkfac_1);
     peak_flowphr2 = (avg_flowphr2 * pkfac_2);
 
-    // Peak flow per second in m3/s
     peak_flowps1 = (avg_flowps1 * pkfac_1);
     peak_flowps2 = (avg_flowps2 * pkfac_2);
 
-    // Peak flow during peak time in m3
     peak_flow1 = (avg_flowphr1 * pkfac_1 * peak_tme);
     peak_flow2 = (avg_flowphr2 * pkfac_2 * peak_tme);
 
-    // Balance flow during non peak time in m3
     balflw1 = ((flow1 * 1000) - peak_flow1);
     balflw2 = ((flow2 * 1000) - peak_flow2);
 
-    // Non peak hourly flow or hourly balance flow in m3/hr
     nonpeak_hrflw1 = (balflw1 / nonpeak_tme);
     nonpeak_hrflw2 = (balflw2 / nonpeak_tme);
 
-    // Actual velocity calculation
     vel_act = peak_flowps1 / (0.7854 * Math.pow((id / 1000), 2));
     vel_act2 = peak_flowps2 / (0.7854 * Math.pow((id / 1000), 2));
 
-    // Cost of pipeline
     cost_pipeline = getValue('TextBox96') * l_pmain / 100000;
 
-    // Frictional loss in pipe during peak flow
     loss_frictionpk = Math.pow(((peak_flowphr1) / (1.292 * 0.00001 * getValue('TextBox28') * Math.pow(id, 2.63))), (1 / 0.54)) * l_pmain;
     loss_frictionpk2 = Math.pow(((peak_flowphr2) / (1.292 * 0.00001 * getValue('TextBox28') * Math.pow(id, 2.63))), (1 / 0.54)) * l_pmain;
 
-    // Frictional loss in pipe during non peak flow
     loss_friction = Math.pow(((nonpeak_hrflw1) / (1.292 * 0.00001 * getValue('TextBox28') * Math.pow(id, 2.63))), (1 / 0.54)) * l_pmain;
     loss_friction2 = Math.pow(((nonpeak_hrflw2) / (1.292 * 0.00001 * getValue('TextBox28') * Math.pow(id, 2.63))), (1 / 0.54)) * l_pmain;
 
-    // Minor loss during peak flow
     loss_minor1peak = 0.07 * loss_frictionpk;
     loss_minor2peak = 0.07 * loss_frictionpk2;
 
-    // Minor loss during non peak flow
     loss_minor = 0.07 * loss_friction;
     loss_minor2 = 0.07 * loss_friction2;
 
-    // Static head
     st_head = dis_elv - low_level;
 
-    // Total Pump HEAD during peak hours
     pump_headpk = loss_frictionpk + loss_minor1peak + st_head + res_head + stn_loss;
     pump_headpk2 = loss_frictionpk2 + loss_minor2peak + st_head + res_head + stn_loss;
 
-    // Total PUMP Head during non peak hours
     pump_head = loss_friction + loss_minor + st_head + res_head + stn_loss;
     pump_head2 = loss_friction2 + loss_minor2 + st_head + res_head + stn_loss;
 
     w_hammer1 = (vel_act / 9.81) * (1425 / Math.sqrt(1 + ((k * (id / 1000)) / (E * (tw / 1000)))));
     w_hammer2 = (vel_act2 / 9.81) * (1425 / Math.sqrt(1 + ((k * (id / 1000)) / (E * (tw / 1000)))));
 
-    // Pump kw DURING peak flow
     pump_kwpk = ((peak_flowphr1) * pump_headpk) / (367.25 * (pump_eff / 100) * (motor_eff / 100));
     pump_kwpk2 = ((peak_flowphr2) * pump_headpk2) / (367.25 * (pump_eff / 100) * (motor_eff / 100));
 
-    // Pump kw during non peak flow
     pump_kw = ((nonpeak_hrflw1) * pump_head) / (367.25 * (pump_eff / 100) * (motor_eff / 100));
     pump_kw2 = ((nonpeak_hrflw2) * pump_head2) / (367.25 * (pump_eff / 100) * (motor_eff / 100));
 
-    // Total pump kw during both peak flow and non peak flow
     tot_pumpkw1 = pump_kwpk + pump_kw;
     tot_pumpkw2 = pump_kwpk2 + pump_kw2;
 
-    // CAPITAL COST OF PUMPSET (THIS IS CORRECT FOR STAGE 1)
     cost_pumpset = pump_kwpk * (1 + (standby / 100)) * cost_pump / 100000;
 
-    // CAPITAL COST OF PUMPSET FOR STAGE 2
     cost_pumpset2 = pump_kwpk2 * (1 + (standby / 100)) * cost_pump / 100000;
 
-    // Cost of pumpsets after 15 years for replacement
     cost_pumpset_15y = cost_pumpset2 * Math.pow(1 + (esc_ann_rate / 100), 15);
 
-    // PRESENT WORTH OF CAPITAL COST OF PUMPSET FOR STAGE 2
     pw_capcostpumpset2 = cost_pumpset_15y / Math.pow(1 + (ann_rate / 100), l_pump);
 
-    // Power required in one year for peak flow
     pow_pkpy1 = pump_kwpk * peak_tme * 365;
     pow_pkpy2 = pump_kwpk2 * peak_tme * 365;
 
-    // Power required in one year for non peak flow
     pow_nonpk1 = pump_kw * nonpeak_tme * 365;
     pow_nonpk2 = pump_kw2 * nonpeak_tme * 365;
 
-    // Total power required in one year
     pow_py = pow_pkpy1 + pow_nonpk1;
     pow_py2 = pow_pkpy2 + pow_nonpk2;
 
-    // Power COST DURING FIRST YEAR
     pow_costfy = pow_py * pow_tariff / 100000;
     pow_costfy2 = pow_py2 * pow_tariff / 100000;
 
-    // O&M COST OF PUMPSET PER YEAR
     om_pumpset_py = omfac_pump / 100 * cost_pumpset;
     om_pumpset_py2 = omfac_pump / 100 * cost_pumpset2;
 
-    // O&M COST OF PIPELINE PER YEAR
     om_pipe_py = omfac_pipe / 100 * cost_pipeline;
 
-    // X FACTOR
     Xf = (1 + (esc_ann_rate / 100)) / (1 + (ann_rate / 100));
 
-    // Replacement Cost of Pumpsets - Present Worth
     pw_replace = cost_pumpset_15y / Math.pow((1 + (ann_rate / 100)), l_pump);
 
-    // Power COST for stage 1 present worth
     pw_pow_cost = pow_costfy * Xf * (1 - Math.pow(Xf, n)) / (1 - Xf);
 
-    // Power cost for stage 2 present worth
     pw_pow_cost2 = (pow_costfy2 / (Math.pow((1 + ann_rate / 100), l_pump))) * Xf * (1 - Math.pow(Xf, l_pipe)) / (1 - Xf);
 
-    // Total power cost for stage 1 and stage 2 present worth
     total_pw_pow_cost = pw_pow_cost + pw_pow_cost2;
 
-    // Pipeline O&M COST PRESENT WORTH
     pw_pipeline_om = om_pipe_py * Xf * (1 - Math.pow(Xf, l_pipe)) / (1 - Xf);
 
-    // Pumpset O&M cost for stage 1 Present worth
     pw_pumpset_om = om_pumpset_py * Xf * (1 - Math.pow(Xf, l_pump)) / (1 - Xf);
 
-    // Pumpset o&m cost for stage 2 Present worth
     life_stage1plusstage2 = (n + stag2_year);
     pw_pumpset_om2 = (om_pumpset_py2 / (Math.pow((1 + ann_rate / 100), l_pump))) * Xf * (1 - Math.pow(Xf, l_pipe)) / (1 - Xf);
 
-    // Total net present value for stage 1 (excluding pipe)
     total_pw1 = cost_pumpset + pw_pow_cost + pw_pumpset_om;
 
-    // Total net present value for stage 2 (excluding pipe)
     total_pw2 = pw_capcostpumpset2 + pw_pow_cost2 + pw_pumpset_om2;
 
-    // Total net present value for both stage 1 and stage 2 including pipeline
     total_pw = (pw_pipeline_om + cost_pipeline) + (cost_pumpset + pw_capcostpumpset2 + pw_pumpset_om + pw_pumpset_om2) + (pw_pow_cost + pw_pow_cost2);
 
-    // Fill results
     setValue('res_actualVelocity_stage1', Math.round(vel_act * 100) / 100);
     setValue('res_actualVelocity_stage2', Math.round(vel_act2 * 100) / 100);
     setValue('res_friction_peak_stage1', Math.round(loss_frictionpk * 100) / 100);
@@ -499,7 +432,6 @@ function buttonCalcClick() {
     setValue('res_net_total_power_cost', Math.round(total_pw_pow_cost * 100) / 100);
     setValue('res_total_npv_all', Math.round(total_pw * 100) / 100);
 
-    // enable Add / Refresh / Continue controls now that calculation is complete
     const resBtn = document.getElementById('result_button');
     if (resBtn) resBtn.disabled = false;
     const refBtn = document.getElementById('refresh_button');
@@ -507,39 +439,51 @@ function buttonCalcClick() {
     const contBtn = document.getElementById('continue_button');
     if (contBtn) contBtn.disabled = false;
 
-    // keep next action coherent
     document.getElementById('button4').disabled = false;
     document.getElementById('button5').disabled = true;
     document.getElementById('button_calc').disabled = true;
 }
 
+// reset form state
 function refreshButton() {
-    // reset all calculated readonly values
     document.querySelectorAll('input[readonly]').forEach(el => el.value = '');
     document.querySelectorAll('#Label1, #Label2, #Label3, #Label4, #Label5, #Label6').forEach(el => el.classList.add('d-none'));
 
-    // reset stage selection and computed flags
-    document.getElementById('button4').disabled = false;
-    document.getElementById('button5').disabled = true;
-    document.getElementById('button_calc').disabled = true;
+    document.getElementById('button4').disabled = false;    // max/min
+    document.getElementById('button5').disabled = true;     // water hammer
+    document.getElementById('button_calc').disabled = true; // calculate
     document.getElementById('result_button').disabled = true;
     document.getElementById('continue_button').disabled = true;
     document.getElementById('optimum_diameter_button').disabled = true;
 
-    // allow change material/class selection
-    document.getElementById('ddlm').disabled = false;
-    ['ddld1','ddld2','ddld3','ddld4','ddld5','ddld6'].forEach(i => {
-        const e = document.getElementById(i);
-        if (e) e.selectedIndex = 0;
+    document.querySelectorAll('input, select').forEach(el => {
+        if (!el.hasAttribute('readonly')) el.disabled = false;
     });
 
-    // clear the input table values too
-    ['TextBox1','TextBox2','TextBox3','TextBox4','TextBox5','TextBox6','TextBox7','TextBox8','TextBox9','TextBox10','TextBox11','TextBox12','TextBox13','TextBox14','TextBox15','TextBox16','TextBox17','TextBox18','TextBox19','TextBox20','TextBox21','TextBox22','TextBox23','TextBox24','TextBox25','TextBox26','TextBox27','TextBox28','TextBox29','TextBox96','txt_di','txt_tw','txt_k','txt_E','txt_pr1'].forEach(id => {
+    ['paneld1', 'paneld2', 'paneld3', 'paneld4', 'paneld5', 'paneld6'].forEach(id => showElement(id, false));
+    ['ddld1', 'ddld2', 'ddld3', 'ddld4', 'ddld5', 'ddld6'].forEach(i => {
+        const e = document.getElementById(i);
+        if (e) {
+            e.selectedIndex = 0;
+            e.disabled = false;
+        }
+    });
+
+    const mat = document.getElementById('ddlm');
+    if (mat) {
+        mat.selectedIndex = 0;
+        mat.disabled = false;
+    }
+
+    d = 0;
+
+    ['TextBox1', 'TextBox2', 'TextBox3', 'TextBox4', 'TextBox5', 'TextBox6', 'TextBox7', 'TextBox8', 'TextBox9', 'TextBox10', 'TextBox11', 'TextBox12', 'TextBox13', 'TextBox14', 'TextBox15', 'TextBox16', 'TextBox17', 'TextBox18', 'TextBox19', 'TextBox20', 'TextBox21', 'TextBox22', 'TextBox23', 'TextBox24', 'TextBox25', 'TextBox26', 'TextBox27', 'TextBox28', 'TextBox29', 'TextBox96', 'txt_di', 'txt_tw', 'txt_k', 'txt_E', 'txt_pr1'].forEach(id => {
         const el = document.getElementById(id);
         if (el && !el.hasAttribute('readonly')) el.value = el.type === 'number' ? '' : '';
     });
 }
 
+// continue button handler
 function continueButton() {
     const opt = document.getElementById('optimum_diameter_button');
     if (opt) opt.disabled = false;
@@ -547,23 +491,21 @@ function continueButton() {
     if (cont) cont.disabled = true;
 }
 
+// reveal output panel
 function outPutPanel() {
     const panel = document.getElementById('three_tables');
     if (panel) panel.classList.remove('d-none');
 }
 
-// Dynamic tables data
 const dtDatas = [];
 const dtDatas1 = [];
 const dtDatas2 = [];
 
 function byId(id) { return document.getElementById(id); }
 
-// Render a table into a container element
 function renderTable(tableId, rows) {
     let container = byId(tableId);
     if (!container) {
-        // create and append to three_tables if not present
         const parent = byId('three_tables') || document.body;
         container = document.createElement('div');
         container.id = tableId;
@@ -589,28 +531,34 @@ function renderTable(tableId, rows) {
     container.innerHTML = html;
 }
 
-// Helper to read element value as string (prefer displayed result if present)
 function getStr(id) {
     const el = byId(id);
     if (!el) return '';
     return (el.value !== undefined && el.value !== null) ? String(el.value) : String(el.textContent || '');
 }
 
-// Add current result snapshot to dynamic tables
 function addResult() {
     try {
-        // disable add result and enable continue/refresh
         const resBtn = byId('result_button');
         if (resBtn) resBtn.disabled = true;
         const cont = byId('continue_button'); if (cont) cont.disabled = false;
         const ref = byId('refresh_button'); if (ref) ref.disabled = false;
 
-        // make sure three_tables visible
         const three = byId('three_tables'); if (three) three.classList.remove('d-none');
 
-        // Table for Stage I summary (s1 style)
+        function currentNominal() {
+            const ids = ['ddld1', 'ddld2', 'ddld3', 'ddld4', 'ddld5', 'ddld6'];
+            for (const id of ids) {
+                const sel = document.getElementById(id);
+                if (sel && !sel.closest('.d-none') && sel.value) {
+                    return sel.value;
+                }
+            }
+            return getStr('TextBox94') || getStr('txtdia_opt');
+        }
+
         const row1 = {
-            'Diameter': getStr('TextBox94') || getStr('txtdia_opt'),
+            'Diameter': currentNominal(),
             'Inner Diameter': getStr('txt_di'),
             'Average Hourly Flow for Stage I': getStr('TextBox30'),
             'Total Flow in Peak Flow Hours for Stage I': getStr('TextBox32'),
@@ -642,7 +590,6 @@ function addResult() {
         };
         dtDatas.push(row1);
 
-        // Table for general input/output snapshot (t_ style)
         const row2 = {
             'Flow for stage 1': getStr('TextBox3'),
             'Flow for stage 2': getStr('TextBox4'),
@@ -680,7 +627,6 @@ function addResult() {
         };
         dtDatas1.push(row2);
 
-        // Table for Stage II snapshot (s2 style)
         const row3 = {
             'Average Hourly Flow for Stage II': getStr('TextBox31'),
             'Total Flow in Peak Flow Hours for Stage II': getStr('TextBox33'),
@@ -712,7 +658,6 @@ function addResult() {
         };
         dtDatas2.push(row3);
 
-        // update already-present base tables in the markup
         const setTd = (id, v) => {
             const el = document.getElementById(id);
             if (el) el.textContent = v;
@@ -810,9 +755,7 @@ function addResult() {
         setTd('s1_npv_power', row1['Net Present value of Power cost_StageI']);
         setTd('s1_total_npv_stage1', row1['Total Net Present Value for Stage I (Excluding Pipe)']);
 
-        // render tables into gv1, gv2, gv3 containers
-       
-        // highlight last rows by adding bg-warning class on last row
+
         const mark = (id) => {
             const tbl = byId(id)?.querySelector('table');
             if (!tbl) return;
@@ -829,65 +772,58 @@ function addResult() {
     }
 }
 
-// expose globally for onclick in markup
 window.addResult = addResult;
 
-// Ensure optimum calculation uses dtDatas2 and dtDatas
 function optimumDiameter() {
     if (!Array.isArray(dtDatas) || dtDatas.length === 0) {
         alert('No results added yet');
         return;
     }
-    
-    // Algorithm from old ASPX.cs: find where Total Net Present Value stops decreasing
+
     const len = Math.min(dtDatas.length, dtDatas2.length);
-    
+
     if (len === 1) {
         const out = byId('txtdia_opt');
         if (out) out.value = dtDatas[0]['Diameter'] ?? '';
         return;
     }
-    
+
     let j = 1;
     let z = parseFloat(String(dtDatas2[j]['Total Net Present Value']).replace(/,/g, '')) || 0;
     let d1 = dtDatas[j]['Diameter'];
-    
+
     let bestZ = z;
     let bestD = d1;
-    
+
     do {
         z = parseFloat(String(dtDatas2[j]['Total Net Present Value']).replace(/,/g, '')) || 0;
         d1 = dtDatas[j]['Diameter'];
-        
+
         const z1 = parseFloat(String(dtDatas2[j - 1]['Total Net Present Value']).replace(/,/g, '')) || 0;
         const d2 = dtDatas[j - 1]['Diameter'];
-        
+
         const z2 = Math.min(z, z1);
-        
+
         if (z2 > bestZ) {
-            // Cost has started increasing, use the best value found
             break;
         } else {
             if (z <= z1) {
-                // Current is better than previous
                 bestZ = z;
                 bestD = d1;
             } else if (z > z1) {
-                // Previous is better than current
                 bestZ = z1;
                 bestD = d2;
             }
         }
         j++;
     } while (j < len);
-    
+
     const out = byId('txtdia_opt');
     if (out) out.value = bestD ?? '';
 }
 
 window.optimumDiameter = optimumDiameter;
 
-// Event listeners setup
 function setupEventListeners() {
     const btn4 = document.getElementById('button4');
     const btn5 = document.getElementById('button5');
