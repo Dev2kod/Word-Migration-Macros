@@ -1,0 +1,451 @@
+Option Explicit
+
+' ============================
+' SETTINGS
+' ============================
+Private Const TYPE4_START_PAGE As Long = 1          ' Type-4: start from page 1 (do NOT skip)
+Private Const EXPORT_FIGURES As Boolean = True      ' set False if you don't want images in XML
+
+' ============================
+' PIPELINE WRAPPER (DO NOT RENAME)
+' ============================
+Public Function Code2_CreateXmlText_FromOpenDoc(ByVal src As Document) As String
+
+    ' Start from page 1 for Type-4
+    Dim bodyRng As Range
+    Set bodyRng = RangeFromPageToEnd(src, TYPE4_START_PAGE)
+
+    If bodyRng Is Nothing Or Len(Trim$(bodyRng.text)) = 0 Then
+        Code2_CreateXmlText_FromOpenDoc = ""
+        Exit Function
+    End If
+
+    Code2_CreateXmlText_FromOpenDoc = BuildXmlFromRange_OrderPreserving(src, bodyRng, TYPE4_START_PAGE)
+End Function
+
+
+' ============================
+' ORDER-PRESERVING XML BUILDER
+' - Preserves order: <p> / <table> / <figure>
+' - Prefix numbering 1.0 / 2.1.1 using ListFormat.ListString
+' ============================
+Private Function BuildXmlFromRange_OrderPreserving(ByVal src As Document, ByVal r As Range, ByVal startPage As Long) As String
+
+    Dim sb As Collection: Set sb = New Collection
+
+    sb.Add "<?xml version=""1.0"" encoding=""UTF-8""?>" & vbLf
+    sb.Add "<document source=""" & X(src.FullName) & """ generated=""" & X(Format$(Now, "yyyy-mm-dd\THH:nn:ss")) & """>" & vbLf
+    sb.Add "  <body startPage=""" & CStr(startPage) & """>" & vbLf
+
+    ' ---- Figures collection (optional) ----
+    Dim figs As Collection: Set figs = New Collection
+    Dim figIndex As Long: figIndex = 1
+
+    Dim mediaFolder As String
+    If EXPORT_FIGURES Then
+        mediaFolder = CreateTempMediaFolder(src)
+        EnsureFolder mediaFolder
+        Set figs = CollectAndExportFigures(src, r, mediaFolder)
+    End If
+
+    ' ---- Walk paragraphs in order ----
+    Dim pCount As Long: pCount = r.Paragraphs.Count
+    Dim i As Long: i = 1
+
+    Do While i <= pCount
+
+        Dim p As Paragraph
+        Set p = r.Paragraphs(i)
+
+        ' Emit figures anchored before this paragraph
+        If EXPORT_FIGURES Then
+            Do While figIndex <= figs.Count
+                If CLng(figs(figIndex)("pos")) <= CLng(p.Range.Start) Then
+                    sb.Add FigureToXml(figs(figIndex))
+                    figIndex = figIndex + 1
+                Else
+                    Exit Do
+                End If
+            Loop
+        End If
+
+        ' Table handling: export table once at start, then skip its paragraphs
+        If p.Range.Information(wdWithInTable) Then
+
+            Dim tb As Table
+            Set tb = p.Range.Tables(1)
+
+            If p.Range.Start = tb.Range.Start Then
+                sb.Add TableToXml_Safe(tb)
+            End If
+
+            ' Skip all paragraphs belonging to this table
+            Dim j As Long: j = i
+            Do While j <= pCount
+                If r.Paragraphs(j).Range.Start < tb.Range.End Then
+                    j = j + 1
+                Else
+                    Exit Do
+                End If
+            Loop
+
+            i = j
+            GoTo ContinueLoop
+        End If
+
+        ' Normal paragraph outside table
+        Dim txt As String
+        txt = Trim$(StripParaMark(p.Range.text))
+        txt = Replace(txt, vbFormFeed, "")
+
+        ' Prefix numbering like 1.0, 2.1.1 (Word stores numbering in formatting, not text)
+        txt = PrefixListNumberIfAny(p, txt)
+
+        If Len(txt) > 0 Then
+            sb.Add "    <p>" & X(txt) & "</p>" & vbLf
+        End If
+
+        i = i + 1
+
+ContinueLoop:
+    Loop
+
+    ' Remaining figures after last paragraph
+    If EXPORT_FIGURES Then
+        Do While figIndex <= figs.Count
+            sb.Add FigureToXml(figs(figIndex))
+            figIndex = figIndex + 1
+        Loop
+    End If
+
+    sb.Add "  </body>" & vbLf
+    sb.Add "</document>" & vbLf
+
+    BuildXmlFromRange_OrderPreserving = JoinCollection(sb)
+End Function
+
+
+' ============================
+' PREFIX NUMBERING
+' ============================
+Private Function PrefixListNumberIfAny(ByVal p As Paragraph, ByVal txt As String) As String
+    Dim num As String: num = ""
+
+    On Error Resume Next
+    num = Trim$(p.Range.ListFormat.ListString)
+    On Error GoTo 0
+
+    If Len(num) > 0 Then
+        ' ignore bullets
+        If num <> "•" And num <> "-" And LCase$(num) <> "o" Then
+            If InStr(1, txt, num & " ", vbTextCompare) <> 1 Then
+                If Len(txt) > 0 Then
+                    PrefixListNumberIfAny = num & " " & txt
+                Else
+                    PrefixListNumberIfAny = num
+                End If
+                Exit Function
+            End If
+        End If
+    End If
+
+    PrefixListNumberIfAny = txt
+End Function
+
+
+' ============================
+' TABLE -> XML (skip fully empty rows)
+' ============================
+Private Function TableToXml_Safe(ByVal tb As Table) As String
+    Dim sb As Collection: Set sb = New Collection
+    sb.Add "    <table>" & vbLf
+
+    Dim r As Long, c As Long, maxC As Long
+    Dim rowHasContent As Boolean
+
+    For r = 1 To tb.rows.Count
+        maxC = tb.rows(r).cells.Count
+
+        rowHasContent = False
+        For c = 1 To maxC
+            Dim CellText As String: CellText = ""
+            On Error Resume Next
+            CellText = tb.rows(r).cells(c).Range.text
+            On Error GoTo 0
+
+            CellText = StripParaMark(CleanCell(CellText))
+            If Len(Trim$(CellText)) > 0 Then
+                rowHasContent = True
+                Exit For
+            End If
+        Next c
+
+        If Not rowHasContent Then GoTo NextRow
+
+        sb.Add "      <row>" & vbLf
+        For c = 1 To maxC
+            Dim cellText2 As String: cellText2 = ""
+            On Error Resume Next
+            cellText2 = tb.rows(r).cells(c).Range.text
+            On Error GoTo 0
+
+            sb.Add "        <cell>" & X(StripParaMark(CleanCell(cellText2))) & "</cell>" & vbLf
+        Next c
+        sb.Add "      </row>" & vbLf
+
+NextRow:
+    Next r
+
+    sb.Add "    </table>" & vbLf
+    TableToXml_Safe = JoinCollection(sb)
+End Function
+
+
+' ============================
+' FIGURES (optional export)
+' ============================
+Private Function CollectAndExportFigures(ByVal src As Document, ByVal bodyRng As Range, ByVal folderPath As String) As Collection
+    Dim col As New Collection
+
+    ' InlineShapes
+    Dim ils As InlineShape
+    For Each ils In src.InlineShapes
+        Dim pos As Long: pos = 0
+        On Error Resume Next
+        pos = ils.Range.Start
+        On Error GoTo 0
+
+        If pos >= bodyRng.Start And pos <= bodyRng.End Then
+            Dim imgPath As String
+            imgPath = ExportInlineShapeToImage(ils, folderPath, "FIG")
+            If Len(imgPath) > 0 Then
+                Dim d As Object: Set d = CreateObject("Scripting.Dictionary")
+                d("pos") = pos
+                d("src") = imgPath
+                d("kind") = "inline"
+                col.Add d
+            End If
+        End If
+    Next ils
+
+    ' Floating Shapes
+    Dim shp As Shape
+    For Each shp In src.Shapes
+        Dim ap As Long: ap = 0
+        On Error Resume Next
+        ap = shp.Anchor.Start
+        On Error GoTo 0
+
+        If ap >= bodyRng.Start And ap <= bodyRng.End Then
+            Dim imgPath2 As String
+            imgPath2 = ExportShapeToImage(shp, folderPath, "FIGSHP")
+            If Len(imgPath2) > 0 Then
+                Dim d2 As Object: Set d2 = CreateObject("Scripting.Dictionary")
+                d2("pos") = ap
+                d2("src") = imgPath2
+                d2("kind") = "shape"
+                col.Add d2
+            End If
+        End If
+    Next shp
+
+    Set CollectAndExportFigures = SortFigureCollectionByPos(col)
+End Function
+
+Private Function FigureToXml(ByVal figItem As Object) As String
+    FigureToXml = "    <figure src=""" & X(CStr(figItem("src"))) & """ kind=""" & X(CStr(figItem("kind"))) & """ />" & vbLf
+End Function
+
+Private Function ExportInlineShapeToImage(ByVal ils As InlineShape, ByVal folderPath As String, ByVal prefix As String) As String
+    ExportInlineShapeToImage = ""
+
+    Dim tmpDoc As Document
+    Set tmpDoc = Documents.Add
+
+    Dim htmlPath As String
+    htmlPath = folderPath & "\" & prefix & "_" & Format$(CLng(Timer * 1000), "0") & ".htm"
+
+    On Error Resume Next
+    ils.Range.CopyAsPicture
+    tmpDoc.Range(0, 0).PasteSpecial DataType:=wdPasteMetafilePicture
+    SafeSaveAsFilteredHTML tmpDoc, htmlPath
+    tmpDoc.Close SaveChanges:=False
+    On Error GoTo 0
+
+    ExportInlineShapeToImage = FirstImageFromHtmlFolder(htmlPath)
+End Function
+
+Private Function ExportShapeToImage(ByVal shp As Shape, ByVal folderPath As String, ByVal prefix As String) As String
+    ExportShapeToImage = ""
+
+    Dim tmpDoc As Document
+    Set tmpDoc = Documents.Add
+
+    Dim htmlPath As String
+    htmlPath = folderPath & "\" & prefix & "_" & Format$(CLng(Timer * 1000), "0") & ".htm"
+
+    On Error Resume Next
+    shp.Anchor.Document.Activate
+    shp.Select
+    Selection.CopyAsPicture
+
+    tmpDoc.Activate
+    tmpDoc.Range(0, 0).PasteSpecial DataType:=wdPasteMetafilePicture
+
+    SafeSaveAsFilteredHTML tmpDoc, htmlPath
+    tmpDoc.Close SaveChanges:=False
+    On Error GoTo 0
+
+    ExportShapeToImage = FirstImageFromHtmlFolder(htmlPath)
+End Function
+
+
+' ============================
+' HELPERS
+' ============================
+Private Function RangeFromPageToEnd(ByVal doc As Document, ByVal pageNum As Long) As Range
+    Dim r As Range
+    On Error Resume Next
+    Set r = doc.GoTo(What:=wdGoToPage, Which:=wdGoToAbsolute, Count:=pageNum)
+    On Error GoTo 0
+    If r Is Nothing Then
+        Set RangeFromPageToEnd = Nothing
+        Exit Function
+    End If
+    Set RangeFromPageToEnd = doc.Range(Start:=r.Start, End:=doc.content.End)
+End Function
+
+Private Function StripParaMark(ByVal s As String) As String
+    StripParaMark = Replace(s, vbCr, "")
+End Function
+
+Private Function CleanCell(ByVal s As String) As String
+    Dim t As String
+    t = Replace(s, Chr$(13), "")
+    t = Replace(t, Chr$(7), "")
+    CleanCell = t
+End Function
+
+' ? Correct XML escaping: escape only content, not tags
+Private Function X(ByVal s As String) As String
+    s = Replace(s, "&", "&amp;")
+    s = Replace(s, "<", "&lt;")
+    s = Replace(s, ">", "&gt;")
+    s = Replace(s, """", "&quot;")
+    s = Replace(s, "'", "&apos;")
+    X = s
+End Function
+
+Private Function JoinCollection(ByVal c As Collection) As String
+    Dim i As Long, s As String
+    For i = 1 To c.Count
+        s = s & CStr(c(i))
+    Next i
+    JoinCollection = s
+End Function
+
+Private Sub EnsureFolder(ByVal folderPath As String)
+    Dim fso As Object: Set fso = CreateObject("Scripting.FileSystemObject")
+    On Error Resume Next
+    If Not fso.FolderExists(folderPath) Then fso.CreateFolder folderPath
+    On Error GoTo 0
+End Sub
+
+Private Function CreateTempMediaFolder(ByVal src As Document) As String
+    Dim fso As Object: Set fso = CreateObject("Scripting.FileSystemObject")
+    Dim base As String: base = CleanFileName(fso.GetBaseName(src.FullName))
+
+    Dim folderPath As String
+    folderPath = Environ$("TEMP") & "\TCE_Media_" & base & "_" & Format$(Now, "yyyymmdd_hhnnss")
+
+    CreateTempMediaFolder = folderPath
+End Function
+
+Private Function CleanFileName(ByVal s As String) As String
+    Dim bad As Variant, i As Long
+    bad = Array("\", "/", ":", "*", "?", """", "<", ">", "|")
+    For i = LBound(bad) To UBound(bad)
+        s = Replace$(s, bad(i), "_")
+    Next i
+    CleanFileName = s
+End Function
+
+Private Sub SafeSaveAsFilteredHTML(ByVal d As Object, ByVal htmlPath As String)
+    On Error Resume Next
+    CallByName d, "SaveAs2", VbMethod, htmlPath, wdFormatFilteredHTML
+    If Err.Number <> 0 Then
+        Err.Clear
+        CallByName d, "SaveAs", VbMethod, htmlPath, wdFormatFilteredHTML
+    End If
+    On Error GoTo 0
+End Sub
+
+Private Function FirstImageFromHtmlFolder(ByVal htmlPath As String) As String
+    FirstImageFromHtmlFolder = ""
+
+    Dim fso As Object: Set fso = CreateObject("Scripting.FileSystemObject")
+    If Len(Dir$(htmlPath)) = 0 Then Exit Function
+
+    Dim baseName As String: baseName = fso.GetBaseName(htmlPath)
+    Dim parentFolder As String: parentFolder = fso.GetParentFolderName(htmlPath)
+    Dim filesFolder As String: filesFolder = parentFolder & "\" & baseName & "_files"
+    If Not fso.FolderExists(filesFolder) Then Exit Function
+
+    Dim fld As Object, fil As Object
+    Set fld = fso.GetFolder(filesFolder)
+
+    For Each fil In fld.files
+        If LCase$(fso.GetExtensionName(fil.Name)) = "png" Then
+            FirstImageFromHtmlFolder = fil.path
+            Exit Function
+        End If
+    Next fil
+
+    For Each fil In fld.files
+        Dim ext As String
+        ext = LCase$(fso.GetExtensionName(fil.Name))
+        If ext = "jpg" Or ext = "jpeg" Or ext = "gif" Or ext = "bmp" Or ext = "wmf" Or ext = "emf" Then
+            FirstImageFromHtmlFolder = fil.path
+            Exit Function
+        End If
+    Next fil
+End Function
+
+'Sort a collection of dictionaries by item("pos") ascending
+Private Function SortFigureCollectionByPos(ByVal col As Collection) As Collection
+    Dim n As Long: n = col.Count
+    If n <= 1 Then
+        Set SortFigureCollectionByPos = col
+        Exit Function
+    End If
+
+    Dim arr() As Variant
+    ReDim arr(1 To n)
+
+    Dim i As Long
+    For i = 1 To n
+        Set arr(i) = col(i)
+    Next i
+
+    Dim swapped As Boolean
+    Do
+        swapped = False
+        For i = 1 To n - 1
+            If CLng(arr(i)("pos")) > CLng(arr(i + 1)("pos")) Then
+                Dim tmp As Variant
+                Set tmp = arr(i)
+                Set arr(i) = arr(i + 1)
+                Set arr(i + 1) = tmp
+                swapped = True
+            End If
+        Next i
+    Loop While swapped
+
+    Dim out As New Collection
+    For i = 1 To n
+        out.Add arr(i)
+    Next i
+
+    Set SortFigureCollectionByPos = out
+End Function
+      
