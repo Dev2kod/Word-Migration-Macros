@@ -436,14 +436,21 @@
         }
         const meanMaxRain = rainfallData.reduce((s, r) => s + (r.maxRain || 0), 0) / rainfallData.length;
         const meanRainyDays = rainfallData.reduce((s, r) => s + (r.rainyDays || 0), 0) / rainfallData.length;
-        const P3060 = meanMaxRain * (30 / 60); // placeholder; keep existing formula
+        let P3060;
+        if (meanMaxRain > 0 && meanMaxRain < 50) {
+            P3060 = 0.27 * meanMaxRain * Math.pow(meanRainyDays, 0.33);
+        } else if (meanMaxRain >= 50 && meanMaxRain < 115) {
+            P3060 = 0.97 * Math.pow(meanMaxRain, 0.67) * Math.pow(meanRainyDays, 0.33);
+        } else {
+            P3060 = 0; // Handle error case, perhaps show message
+        }
         setSummaryValues(meanMaxRain, meanRainyDays, P3060);
     }
 
     function setSummaryValues(M, N, P3060) {
-        if (mValueEl) mValueEl.textContent = (M !== null && !isNaN(M)) ? M.toFixed(2) : '';
-        if (nValueEl) nValueEl.textContent = (N !== null && !isNaN(N)) ? N.toFixed(2) : '';
-        if (p3060El) p3060El.textContent = (P3060 !== null && !isNaN(P3060)) ? P3060.toFixed(2) : '';
+        if (mValueEl) mValueEl.textContent = (M !== null && !isNaN(M)) ? M.toFixed(1) : '';
+        if (nValueEl) nValueEl.textContent = (N !== null && !isNaN(N)) ? N.toFixed(1) : '';
+        if (p3060El) p3060El.textContent = (P3060 !== null && !isNaN(P3060)) ? P3060.toFixed(1) : '';
     }
 
     function validateSummaries() {
@@ -459,19 +466,53 @@
         return true;
     }
 
-    // Bell formula placeholder - keep as previous
-    function bellFormula(M, N, T, d) {
-        return M * Math.sqrt(d / 60) * Math.log(T) * (N / 50);
+    // Bell formula implementation based on old code
+    function bellFormula(P3060, T, d) {
+        const lnValues = {
+            2: 0.69314718,
+            5: 1.609437912,
+            10: 2.302585093,
+            25: 3.218875825,
+            50: 3.912023005,
+            100: 4.605170186
+        };
+        const lnT = lnValues[T];
+        const coeffT = 0.21 * lnT + 0.52;
+        if (d === 150) {
+            const coeffs150 = {
+                2: 0.924998663,
+                5: 1.192426055,
+                10: 1.394724067,
+                25: 1.662154459,
+                50: 1.864455471,
+                100: 2.066756483
+            };
+            return coeffs150[T] * P3060;
+        } else {
+            const durationFactors = {
+                5: 1.495348781,
+                10: 1.77827941,
+                15: 1.967989671,
+                30: 2.340347319,
+                45: 2.590020064,
+                60: 2.783157684,
+                90: 3.080070288,
+                120: 3.30975092,
+                180: 3.662841501
+            };
+            const X = durationFactors[d];
+            const coeffD = 0.54 * X - 0.5;
+            return coeffT * coeffD * P3060;
+        }
     }
 
     function computeDepths() {
         depthData = {};
-        const M = mValueEl ? parseFloat(mValueEl.textContent) || 0 : 0;
-        const N = nValueEl ? parseFloat(nValueEl.textContent) || 0 : 0;
+        const P3060 = p3060El ? parseFloat(p3060El.textContent) || 0 : 0;
         returnPeriods.forEach(T => {
             depthData[T] = {};
             durations.forEach(d => {
-                const val = bellFormula(M, N, T, d);
+                const val = bellFormula(P3060, T, d);
                 depthData[T][d] = isFinite(val) ? val : 0;
             });
         });
@@ -495,7 +536,7 @@
             durations.forEach(d => {
                 const id1 = `depth_${T}_${d}`; // original pattern
                 const id2 = `g_i_${T}_${d}`;   // current view
-                const val = depthData[T] && typeof depthData[T][d] !== 'undefined' ? Number(depthData[T][d]).toFixed(2) : '0.00';
+                const val = depthData[T] && typeof depthData[T][d] !== 'undefined' ? Number(depthData[T][d]).toFixed(1) : '0.0';
                 const el1 = document.getElementById(id1);
                 const el2 = document.getElementById(id2);
                 if (el1) el1.textContent = val;
@@ -509,7 +550,7 @@
             durations.forEach(d => {
                 const id1 = `intensity_${T}_${d}`;
                 const id2 = `g_int_${T}_${d}`;
-                const val = intensityData[T] && typeof intensityData[T][d] !== 'undefined' ? Number(intensityData[T][d]).toFixed(2) : '0.00';
+                const val = intensityData[T] && typeof intensityData[T][d] !== 'undefined' ? Number(intensityData[T][d]).toFixed(1) : '0.0';
                 const el1 = document.getElementById(id1);
                 const el2 = document.getElementById(id2);
                 if (el1) el1.textContent = val;
@@ -583,8 +624,8 @@
         const wb = XLSX.utils.book_new();
         const data = [['Return Period', 'Duration (min)', 'Depth (mm)', 'Intensity (mm/hr)']];
         returnPeriods.forEach(T => durations.forEach(d => {
-            const depth = depthData[T] && typeof depthData[T][d] !== 'undefined' ? Number(depthData[T][d]).toFixed(2) : '';
-            const intensity = intensityData[T] && typeof intensityData[T][d] !== 'undefined' ? Number(intensityData[T][d]).toFixed(2) : '';
+            const depth = depthData[T] && typeof depthData[T][d] !== 'undefined' ? Number(depthData[T][d]).toFixed(1) : '';
+            const intensity = intensityData[T] && typeof intensityData[T][d] !== 'undefined' ? Number(intensityData[T][d]).toFixed(1) : '';
             data.push([T, d, depth, intensity]);
         }));
         const ws = XLSX.utils.aoa_to_sheet(data);
@@ -605,8 +646,8 @@
         doc.text('Return Period | Duration | Depth(mm) | Intensity(mm/hr)', 10, y);
         y += 8;
         returnPeriods.forEach(T => durations.forEach(d => {
-            const depth = depthData[T] && typeof depthData[T][d] !== 'undefined' ? Number(depthData[T][d]).toFixed(2) : '';
-            const intensity = intensityData[T] && typeof intensityData[T][d] !== 'undefined' ? Number(intensityData[T][d]).toFixed(2) : '';
+            const depth = depthData[T] && typeof depthData[T][d] !== 'undefined' ? Number(depthData[T][d]).toFixed(1) : '';
+            const intensity = intensityData[T] && typeof intensityData[T][d] !== 'undefined' ? Number(intensityData[T][d]).toFixed(1) : '';
             const line = `${T} yrs | ${d} min | ${depth} | ${intensity}`;
             doc.text(line, 10, y);
             y += 6;
